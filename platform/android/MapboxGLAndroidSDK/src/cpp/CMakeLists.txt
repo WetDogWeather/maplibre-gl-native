@@ -206,6 +206,9 @@ target_compile_options(mapbox-gl
                                $<$<CONFIG:Release>:-fvisibility=hidden>
                                $<$<CONFIG:Release>:-fvisibility-inlines-hidden>)
 
+                           target_compile_options(mapbox-gl PUBLIC -fsanitize=hwaddress -fsanitize-recover=address -fno-omit-frame-pointer)
+                           target_link_options(mapbox-gl PUBLIC -fsanitize=hwaddress -fsanitize-recover=address)
+
 target_link_libraries(mapbox-gl
                       PRIVATE $<$<CONFIG:Release>:-Oz>
                               $<$<CONFIG:Release>:-Wl,--icf=all>

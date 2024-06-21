@@ -45,6 +45,18 @@ android {
         buildConfigField "String", "MAPBOX_VERSION_STRING", String.format("\"Mapbox/%s\"", project.VERSION_NAME)
         buildConfigField "String", "MAPBOX_EVENTS_USER_AGENT", String.format("\"mapbox-maps-android/%s\"", project.VERSION_NAME)
         consumerProguardFiles 'proguard-rules.pro'
+        externalNativeBuild {
+            cmake {
+                // Can also use system or none as ANDROID_STL.
+                arguments "-DANDROID_ARM_MODE=arm", "-DANDROID_STL=c++_shared"
+            }
+        }
+
+        packagingOptions {
+            doNotStrip "*/arm64-v8a/*.so"
+            doNotStrip "*.so"
+            doNotStrip "**/*.so"
+        }
     }
 
     // build native libraries
@@ -81,6 +93,31 @@ android {
             testCoverageEnabled false
             jniDebuggable true
         }
+        hwasan {
+            initWith debug
+            debuggable true
+            jniDebuggable true
+            packagingOptions {
+                jniLibs {
+                    // Needed for wrap.sh.
+                    useLegacyPackaging = true
+                }
+            }
+            externalNativeBuild {
+                cmake {
+                    arguments "-DANDROID_STL=c++_shared", "-DSANITIZE=hwasan"
+                }
+            }
+            ndk {
+                abiFilters "arm64-v8a"
+            }
+            packagingOptions {
+                doNotStrip "*/arm64-v8a/*.so"
+                doNotStrip "*.so"
+                doNotStrip "**/*.so"
+            }
+        }
+
     }
     namespace 'com.mapbox.mapboxsdk'
     lint {
