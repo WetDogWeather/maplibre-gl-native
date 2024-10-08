@@ -23,7 +23,7 @@ void TileLayerGroup::upload(gfx::UploadPass& uploadPass) {
     }
 
 #if !defined(NDEBUG)
-    const auto debugGroup = uploadPass.createDebugGroup(getName() + "-upload");
+    const auto debugGroup = uploadPass.createDebugGroup(getLayerIndex(), getName() + "-upload");
 #endif
 
     visitDrawables([&](gfx::Drawable& drawable_) {
@@ -64,7 +64,7 @@ void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
     }
 
 #if !defined(NDEBUG)
-    const auto debugGroupRender = parameters.encoder->createDebugGroup(getName() + "-render");
+    const auto debugGroupRender = parameters.encoder->createDebugGroup(getLayerIndex(), getName() + "-render");
 #endif
 
     // If we're doing 3D stenciling and have any features to draw, set up the single-value stencil mask.
@@ -74,10 +74,10 @@ void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
         depthMode3d = parameters.depthModeFor3D();
 
         if (stencil3d) {
-            stencilMode3d = parameters.stencilModeFor3D();
+            stencilMode3d = parameters.stencilModeFor3D(getLayerIndex());
         }
     } else if (stencilTiles && !stencilTiles->empty()) {
-        parameters.renderTileClippingMasks(stencilTiles);
+        parameters.renderTileClippingMasks(getLayerIndex(), stencilTiles);
     }
 
     bool bindUBOs = false;

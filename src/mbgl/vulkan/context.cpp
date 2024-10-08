@@ -70,12 +70,6 @@ void Context::initFrameResources() {
     const auto& device = backend.getDevice();
     const auto frameCount = backend.getMaxFrames();
 
-    // command buffers
-    const vk::CommandBufferAllocateInfo allocateInfo(
-        backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, frameCount);
-
-    auto commandBuffers = backend.getDevice()->allocateCommandBuffersUnique(allocateInfo);
-
     // descriptor pool info
     const std::vector<vk::DescriptorPoolSize> poolSizes = {
         {vk::DescriptorType::eUniformBuffer, MLN_VULKAN_DESCRIPTOR_POOL_SIZE},
@@ -88,15 +82,13 @@ void Context::initFrameResources() {
     frameResources.reserve(frameCount);
 
     for (uint32_t index = 0; index < frameCount; ++index) {
-        frameResources.emplace_back(commandBuffers[index],
-                                    device->createDescriptorPoolUnique(descriptorPoolInfo),
+        frameResources.emplace_back(device->createDescriptorPoolUnique(descriptorPoolInfo),
                                     device->createSemaphoreUnique({}),
                                     device->createSemaphoreUnique({}),
                                     device->createFenceUnique(vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled)));
 
         const auto& frame = frameResources.back();
 
-        backend.setDebugName(frame.commandBuffer.get(), "FrameCommandBuffer_" + std::to_string(index));
         backend.setDebugName(frame.descriptorPool.get(), "DescriptorPool_" + std::to_string(index));
         backend.setDebugName(frame.frameSemaphore.get(), "FrameSemaphore_" + std::to_string(index));
         backend.setDebugName(frame.surfaceSemaphore.get(), "SurfaceSemaphore_" + std::to_string(index));
@@ -224,8 +216,13 @@ void Context::beginFrame() {
         renderableResource.setAcquiredImageIndex(frameResourceIndex);
     }
 
-    frame.commandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
-    frame.commandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+    for (auto& buffer : frame.commandBuffers) {
+        if (buffer) {
+            buffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+            buffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+        }
+    }
+    std::fill(frame.bufferHasRenderPass.begin(), frame.bufferHasRenderPass.end(), false);
 
     backend.getThreadPool().runRenderJobs();
 }
@@ -235,22 +232,16 @@ void Context::endFrame() {
 }
 
 void Context::submitFrame() {
-    const auto& frame = frameResources[frameResourceIndex];
-    frame.commandBuffer->end();
-
     const auto& device = backend.getDevice();
     const auto& graphicsQueue = backend.getGraphicsQueue();
     auto& renderableResource = backend.getDefaultRenderable().getResource<SurfaceRenderableResource>();
     const auto& platformSurface = renderableResource.getPlatformSurface();
+    const auto& frame = frameResources[frameResourceIndex];
 
-    // submit frame commands
-    const vk::PipelineStageFlags waitStageMask[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
-    auto submitInfo = vk::SubmitInfo().setCommandBuffers(frame.commandBuffer.get());
-
-    if (platformSurface) {
-        submitInfo.setSignalSemaphores(frame.frameSemaphore.get())
-            .setWaitSemaphores(frame.surfaceSemaphore.get())
-            .setWaitDstStageMask(waitStageMask);
+    for (auto& buffer : frame.commandBuffers) {
+        if (buffer) {
+            buffer->end();
+        }
     }
 
     const vk::Result resetFenceResult = device->resetFences(1, &frame.flightFrameFence.get());
@@ -258,7 +249,26 @@ void Context::submitFrame() {
         mbgl::Log::Error(mbgl::Event::Render, "Reset fence failed");
     }
 
-    graphicsQueue.submit(submitInfo, frame.flightFrameFence.get());
+    // submit frame commands
+    if (platformSurface) {
+        std::vector<vk::CommandBuffer> validBuffers;
+        for (std::size_t i = 0; i < frame.commandBuffers.size(); ++i) {
+            if (auto& buffer = frame.commandBuffers[i]; buffer && frame.bufferHasRenderPass[i]) {
+                validBuffers.push_back(buffer.get());
+            }
+        }
+
+        auto submitInfo = vk::SubmitInfo();
+        if (!validBuffers.empty()) {
+            submitInfo.setCommandBuffers({static_cast<uint32_t>(validBuffers.size()), validBuffers.data()});
+        }
+
+        const vk::PipelineStageFlags waitStageMask[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
+        submitInfo.setSignalSemaphores(frame.frameSemaphore.get())
+            .setWaitSemaphores(frame.surfaceSemaphore.get())
+            .setWaitDstStageMask(waitStageMask);
+        graphicsQueue.submit(submitInfo, frame.flightFrameFence.get());
+    }
 
     // present rendered frame
     if (platformSurface) {
@@ -286,8 +296,39 @@ void Context::submitFrame() {
 }
 
 std::unique_ptr<gfx::CommandEncoder> Context::createCommandEncoder() {
-    const auto& frame = frameResources[frameResourceIndex];
-    return std::make_unique<CommandEncoder>(*this, frame.commandBuffer);
+    return std::make_unique<CommandEncoder>(*this);
+}
+
+const vk::UniqueCommandBuffer& Context::getCommandBuffer(std::int32_t layerIndex,
+                                                         const std::optional<vk::RenderPassBeginInfo>& renderPassInfo) {
+    auto& frame = frameResources[frameResourceIndex];
+    frame.commandBuffers.resize(std::max<std::size_t>(frame.commandBuffers.size(), layerIndex + 1));
+    frame.bufferHasRenderPass.resize(frame.commandBuffers.size());
+
+    vk::UniqueCommandBuffer& buffer = frame.commandBuffers[layerIndex];
+    if (!buffer) {
+        const vk::CommandBufferAllocateInfo allocateInfo(
+            backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, 1);
+        buffer = std::move(backend.getDevice()->allocateCommandBuffersUnique(allocateInfo)[0]);
+
+        backend.setDebugName(
+            buffer.get(),
+            "FrameCommandBuffer_" + util::toString(frameResourceIndex) + "_" + util::toString(layerIndex));
+
+        buffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+    }
+    if (renderPassInfo && !frame.bufferHasRenderPass[layerIndex]) {
+        frame.bufferHasRenderPass[layerIndex] = true;
+        buffer->beginRenderPass(*renderPassInfo, vk::SubpassContents::eInline);
+    }
+    return buffer;
+}
+
+void Context::endEncoding() {
+    auto& frame = frameResources[frameResourceIndex];
+    for (auto& buffer : frame.commandBuffers) {
+        buffer->endRenderPass();
+    }
 }
 
 BufferResource Context::createBuffer(const void* data, std::size_t size, std::uint32_t usage, bool persistent) const {
@@ -392,7 +433,8 @@ void Context::clearStencilBuffer(int32_t) {
 
 void Context::bindGlobalUniformBuffers(gfx::RenderPass&) const noexcept {}
 
-bool Context::renderTileClippingMasks(gfx::RenderPass& renderPass,
+bool Context::renderTileClippingMasks(std::int32_t layerIndex,
+                                      gfx::RenderPass& renderPass,
                                       RenderStaticData& staticData,
                                       const std::vector<shaders::ClipUBO>& tileUBOs) {
     using ShaderClass = shaders::ShaderSource<shaders::BuiltIn::ClippingMaskProgram, gfx::Backend::Type::Vulkan>;
@@ -454,7 +496,7 @@ bool Context::renderTileClippingMasks(gfx::RenderPass& renderPass,
 
     auto& shaderImpl = static_cast<ShaderProgram&>(*clipping.shader);
     auto& renderPassImpl = static_cast<RenderPass&>(renderPass);
-    auto& commandBuffer = renderPassImpl.getEncoder().getCommandBuffer();
+    auto& commandBuffer = renderPassImpl.getEncoder().getCommandBuffer(layerIndex);
 
     clipping.pipelineInfo.setRenderable(renderPassImpl.getDescriptor().renderable);
 

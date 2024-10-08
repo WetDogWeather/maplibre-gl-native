@@ -128,7 +128,8 @@ public:
     /// Unbind the global uniform buffers
     void unbindGlobalUniformBuffers(gfx::RenderPass&) const noexcept override {}
 
-    bool renderTileClippingMasks(gfx::RenderPass& renderPass,
+    bool renderTileClippingMasks(std::int32_t layerIndex,
+                                 gfx::RenderPass& renderPass,
                                  RenderStaticData& staticData,
                                  const std::vector<shaders::ClipUBO>& tileUBOs);
 
@@ -146,11 +147,17 @@ public:
     void enqueueDeletion(std::function<void(const Context&)>&& function);
     void submitOneTimeCommand(const std::function<void(const vk::UniqueCommandBuffer&)>& function);
 
+    const vk::UniqueCommandBuffer& getCommandBuffer(std::int32_t layerIndex,
+                                                    const std::optional<vk::RenderPassBeginInfo>&);
+
+    void endEncoding();
+
     void requestSurfaceUpdate() { surfaceUpdateRequested = true; }
 
 private:
     struct FrameResources {
-        vk::UniqueCommandBuffer commandBuffer;
+        std::vector<vk::UniqueCommandBuffer> commandBuffers;
+        std::vector<bool> bufferHasRenderPass;
         vk::UniqueDescriptorPool descriptorPool;
 
         vk::UniqueSemaphore surfaceSemaphore;
@@ -159,13 +166,11 @@ private:
 
         std::vector<std::function<void(const Context&)>> deletionQueue;
 
-        FrameResources(vk::UniqueCommandBuffer& cb,
-                       vk::UniqueDescriptorPool&& dp,
+        FrameResources(vk::UniqueDescriptorPool&& dp,
                        vk::UniqueSemaphore&& surf,
                        vk::UniqueSemaphore&& frame,
                        vk::UniqueFence&& flight)
-            : commandBuffer(std::move(cb)),
-              descriptorPool(std::move(dp)),
+            : descriptorPool(std::move(dp)),
               surfaceSemaphore(std::move(surf)),
               frameSemaphore(std::move(frame)),
               flightFrameFence(std::move(flight)) {}

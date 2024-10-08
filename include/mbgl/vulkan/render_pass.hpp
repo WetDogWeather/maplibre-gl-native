@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mbgl/gfx/render_pass.hpp>
+#include <mbgl/vulkan/renderer_backend.hpp>
 
 #include <memory>
 #include <optional>
@@ -14,27 +15,29 @@ class Context;
 
 class RenderPass final : public gfx::RenderPass {
 public:
-    RenderPass(CommandEncoder&, const char* name, const gfx::RenderPassDescriptor&);
+    RenderPass(CommandEncoder&, const char* name, const gfx::RenderPassDescriptor&, Context& context);
     ~RenderPass() override;
 
-    vulkan::CommandEncoder& getEncoder() { return commandEncoder; }
+    CommandEncoder& getEncoder() { return commandEncoder; }
     const gfx::RenderPassDescriptor& getDescriptor() { return descriptor; }
     void endEncoding();
 
-    void clearStencil(uint32_t value = 0) const;
+    void clearStencil(std::int32_t layerIndex, uint32_t value = 0) const;
 
-    void addDebugSignpost(const char* name) override;
+    void addDebugSignpost(std::int32_t layerIndex, const char* name) override;
 
     void bindVertex(const BufferResource&, std::size_t offset, std::size_t index, std::size_t size = 0);
     void bindFragment(const BufferResource&, std::size_t offset, std::size_t index, std::size_t size = 0);
 
+    vk::RenderPassBeginInfo getInfo() const;
+
 private:
-    void pushDebugGroup(const char* name) override;
-    void popDebugGroup() override;
+    void pushDebugGroup(std::int32_t layerIndex, const char* name) override;
+    void popDebugGroup(std::int32_t layerIndex) override;
 
 private:
     gfx::RenderPassDescriptor descriptor;
-    vulkan::CommandEncoder& commandEncoder;
+    CommandEncoder& commandEncoder;
 };
 
 } // namespace vulkan

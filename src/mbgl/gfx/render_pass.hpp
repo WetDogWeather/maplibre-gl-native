@@ -27,16 +27,18 @@ protected:
     RenderPass() = default;
 
     friend class DebugGroup<RenderPass>;
-    virtual void pushDebugGroup(const char* name) = 0;
-    virtual void popDebugGroup() = 0;
-    virtual void addDebugSignpost(const char*) {}
+    virtual void pushDebugGroup(std::int32_t layerIndex, const char* name) = 0;
+    virtual void popDebugGroup(std::int32_t layerIndex) = 0;
+    virtual void addDebugSignpost(std::int32_t, const char*) {}
 
 public:
     virtual ~RenderPass() = default;
     RenderPass(const RenderPass&) = delete;
     RenderPass& operator=(const RenderPass&) = delete;
 
-    DebugGroup<RenderPass> createDebugGroup(const char* name) { return {*this, name}; }
+    DebugGroup<RenderPass> createDebugGroup(std::int32_t layerIndex, const char* name) {
+        return {*this, layerIndex, name};
+    }
 };
 
 } // namespace gfx

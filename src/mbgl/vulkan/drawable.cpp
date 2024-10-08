@@ -168,7 +168,7 @@ void Drawable::upload(gfx::UploadPass& uploadPass_) {
 
     if (buildAttribs) {
 #if !defined(NDEBUG)
-        const auto debugGroup = uploadPass.createDebugGroup(debugLabel(*this));
+        const auto debugGroup = uploadPass.createDebugGroup(getLayerIndex(), debugLabel(*this));
 #endif
 
         if (!vertexAttributes) {
@@ -241,9 +241,13 @@ void Drawable::draw(PaintParameters& parameters) const {
     auto& context = static_cast<Context&>(parameters.context);
     auto& renderPass_ = static_cast<RenderPass&>(*parameters.renderPass);
     auto& encoder = renderPass_.getEncoder();
-    auto& commandBuffer = encoder.getCommandBuffer();
+    auto& commandBuffer = encoder.getCommandBuffer(getLayerIndex());
 
     auto& shaderImpl = static_cast<mbgl::vulkan::ShaderProgram&>(*shader);
+
+#if !defined(NDEBUG)
+    const auto debugGroup = renderPass_.createDebugGroup(getLayerIndex(), debugLabel(*this).c_str());
+#endif
 
     if (!bindAttributes(encoder)) return;
     if (!bindDescriptors(encoder)) return;
@@ -388,7 +392,7 @@ void Drawable::buildVulkanInputBindings() noexcept {
 bool Drawable::bindAttributes(CommandEncoder& encoder) const noexcept {
     if (impl->vulkanVertexBuffers.empty()) return false;
 
-    const auto& commandBuffer = encoder.getCommandBuffer();
+    const auto& commandBuffer = encoder.getCommandBuffer(getLayerIndex());
 
     commandBuffer->bindVertexBuffers(0, impl->vulkanVertexBuffers, impl->vulkanVertexOffsets);
 
@@ -476,7 +480,7 @@ bool Drawable::bindDescriptors(CommandEncoder& encoder) const noexcept {
 
     if (drawableDescriptorSets.empty()) return true;
 
-    const auto& commandBuffer = encoder.getCommandBuffer();
+    const auto& commandBuffer = encoder.getCommandBuffer(getLayerIndex());
     commandBuffer->bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics, context.getGeneralPipelineLayout().get(), 0, drawableDescriptorSets, nullptr);
 

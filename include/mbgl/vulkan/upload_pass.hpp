@@ -82,8 +82,8 @@ public:
                                   gfx::TextureChannelDataType) override;
 
 private:
-    void pushDebugGroup(const char* name) override;
-    void popDebugGroup() override;
+    void pushDebugGroup(std::int32_t layerIndex, const char* name) override;
+    void popDebugGroup(std::int32_t layerIndex) override;
 
     void endEncoding();
 

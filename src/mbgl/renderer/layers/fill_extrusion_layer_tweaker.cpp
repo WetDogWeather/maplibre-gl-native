@@ -37,7 +37,7 @@ void FillExtrusionLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintP
 
 #if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(label.c_str());
+    const auto debugGroup = parameters.encoder->createDebugGroup(layerGroup.getLayerIndex(), label.c_str());
 #endif
 
     // UBO depends on more than just evaluated properties, so we need to update every time,

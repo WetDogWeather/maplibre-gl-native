@@ -218,7 +218,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         const auto uploadPass = parameters.encoder->createUploadPass("upload",
                                                                      parameters.backend.getDefaultRenderable());
 #if !defined(NDEBUG)
-        const auto debugGroup = uploadPass->createDebugGroup("upload");
+        const auto debugGroup = uploadPass->createDebugGroup(0, "upload");
 #endif
 
         // Update all clipping IDs + upload buckets.
@@ -248,7 +248,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         const auto uploadPass = parameters.encoder->createUploadPass("layerGroup-upload",
                                                                      parameters.backend.getDefaultRenderable());
 #if !defined(NDEBUG)
-        const auto debugGroup = uploadPass->createDebugGroup("layerGroup-upload");
+        const auto debugGroup = uploadPass->createDebugGroup(0, "layerGroup-upload");
 #endif
 
         // Tweakers are run in the upload pass so they can set up uniforms.
@@ -295,7 +295,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         if (parameters.staticData.has3D) {
             parameters.staticData.backendSize = parameters.backend.getDefaultRenderable().getSize();
 
-            const auto debugGroup(parameters.encoder->createDebugGroup("common-3d"));
+            const auto debugGroup(parameters.encoder->createDebugGroup(0, "common-3d"));
             parameters.pass = RenderPass::Pass3D;
 
             // TODO is this needed?
@@ -311,7 +311,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
 #if MLN_DRAWABLE_RENDERER
     const auto drawable3DPass = [&] {
-        const auto debugGroup(parameters.encoder->createDebugGroup("drawables-3d"));
+        const auto debugGroup(parameters.encoder->createDebugGroup(0, "drawables-3d"));
         assert(parameters.pass == RenderPass::Pass3D);
 
         // draw layer groups, 3D pass
@@ -325,7 +325,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
 #if MLN_LEGACY_RENDERER
     const auto renderLayer3DPass = [&] {
-        const auto debugGroup(parameters.encoder->createDebugGroup("3d"));
+        const auto debugGroup(parameters.encoder->createDebugGroup(0, "3d"));
         int32_t i = static_cast<int32_t>(layerRenderItems.size()) - 1;
         for (auto it = layerRenderItems.begin(); it != layerRenderItems.end() && i >= 0; ++it, --i) {
             parameters.currentLayer = i;
@@ -367,7 +367,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 #if MLN_DRAWABLE_RENDERER
     // Drawables
     const auto drawableOpaquePass = [&] {
-        const auto debugGroup(parameters.renderPass->createDebugGroup("drawables-opaque"));
+        const auto debugGroup(parameters.renderPass->createDebugGroup(0, "drawables-opaque"));
         const auto maxLayerIndex = orchestrator.maxLayerIndex();
         parameters.pass = RenderPass::Opaque;
         parameters.currentLayer = 0;
@@ -382,7 +382,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
     };
 
     const auto drawableTranslucentPass = [&] {
-        const auto debugGroup(parameters.renderPass->createDebugGroup("drawables-translucent"));
+        const auto debugGroup(parameters.renderPass->createDebugGroup(0, "drawables-translucent"));
         const auto maxLayerIndex = orchestrator.maxLayerIndex();
         parameters.pass = RenderPass::Translucent;
         parameters.depthRangeSize = 1 -
@@ -451,7 +451,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
     const auto drawableDebugOverlays = [&] {
         // Renders debug overlays.
         {
-            const auto debugGroup(parameters.renderPass->createDebugGroup("debug"));
+            const auto debugGroup(parameters.renderPass->createDebugGroup(0, "debug"));
             orchestrator.visitDebugLayerGroups([&](LayerGroupBase& layerGroup) {
                 visitLayerGroupDrawables(layerGroup, [&](gfx::Drawable& drawable) {
                     for (const auto& tweaker : drawable.getTweakers()) {

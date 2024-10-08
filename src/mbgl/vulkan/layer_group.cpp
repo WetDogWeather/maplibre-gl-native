@@ -22,7 +22,7 @@ void LayerGroup::upload(gfx::UploadPass& uploadPass) {
     }
 
 #if !defined(NDEBUG)
-    const auto debugGroup = uploadPass.createDebugGroup(getName() + "-upload");
+    const auto debugGroup = uploadPass.createDebugGroup(getLayerIndex(), getName() + "-upload");
 #endif
 
     visitDrawables([&](gfx::Drawable& drawable_) {
@@ -39,7 +39,7 @@ void LayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
     }
 
 #if !defined(NDEBUG)
-    const auto debugGroup = parameters.encoder->createDebugGroup(getName() + "-render");
+    const auto debugGroup = parameters.encoder->createDebugGroup(getLayerIndex(), getName() + "-render");
 #endif
 
     auto& renderPass = static_cast<RenderPass&>(*parameters.renderPass);

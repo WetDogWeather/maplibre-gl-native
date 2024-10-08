@@ -95,10 +95,10 @@ public:
 
     // Stencil handling
 public:
-    void renderTileClippingMasks(const RenderTiles&);
+    void renderTileClippingMasks(std::int32_t layerIndex, const RenderTiles&);
 
     /// Clear the stencil buffer, even if there are no tile masks (for 3D)
-    void clearStencil();
+    void clearStencil(std::int32_t layerIndex);
 
     /// @brief Get a stencil mode for rendering constrined to the specified tile ID.
     /// The tile ID must have been present in the set previously passed to `renderTileClippingMasks`
@@ -108,7 +108,7 @@ public:
     /// @details Clears the tile stencil masks, so `stencilModeForClipping`
     ///          cannot be used until `renderTileClippingMasks` is called again.
     /// @return The stencil mode, each value is unique.
-    gfx::StencilMode stencilModeFor3D();
+    gfx::StencilMode stencilModeFor3D(std::int32_t layerIndex);
 
 private:
     template <typename TIter>

@@ -30,7 +30,7 @@ void CollisionLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParam
 
 #if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(label.c_str());
+    const auto debugGroup = parameters.encoder->createDebugGroup(layerGroup.getLayerIndex(), label.c_str());
 #endif
 
     propertiesUpdated = false;

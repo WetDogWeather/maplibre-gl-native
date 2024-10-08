@@ -126,7 +126,7 @@ bool tileIDsCovered(const RenderTiles& tiles, const TileMaskIDMap& idMap) {
 
 } // namespace
 
-void PaintParameters::clearStencil() {
+void PaintParameters::clearStencil(std::int32_t layerIndex) {
     nextStencilID = 1;
     tileClippingMaskIDs.clear();
 
@@ -135,7 +135,7 @@ void PaintParameters::clearStencil() {
 
     // Metal doesn't have an equivalent of `glClear`, so we clear the buffer by drawing zero to (0:0,0)
 #if !defined(NDEBUG)
-    const auto debugGroup = renderPass->createDebugGroup("tile-clip-mask-clear");
+    const auto debugGroup = renderPass->createDebugGroup(layerIndex, "tile-clip-mask-clear");
 #endif
 
     const std::vector<shaders::ClipUBO> tileUBO = {
@@ -148,7 +148,7 @@ void PaintParameters::clearStencil() {
     context.renderingStats().stencilClears++;
 #elif MLN_RENDER_BACKEND_VULKAN
     const auto& vulkanRenderPass = static_cast<vulkan::RenderPass&>(*renderPass);
-    vulkanRenderPass.clearStencil();
+    vulkanRenderPass.clearStencil(layerIndex, 0);
 
     context.renderingStats().stencilClears++;
 #else // !MLN_RENDER_BACKEND_METAL
@@ -156,7 +156,7 @@ void PaintParameters::clearStencil() {
 #endif
 }
 
-void PaintParameters::renderTileClippingMasks(const RenderTiles& renderTiles) {
+void PaintParameters::renderTileClippingMasks(std::int32_t layerIndex, const RenderTiles& renderTiles) {
     // We can avoid updating the mask if it already contains the same set of tiles.
     if (!renderTiles || !renderPass || tileIDsCovered(renderTiles, tileClippingMaskIDs)) {
         return;
@@ -168,7 +168,7 @@ void PaintParameters::renderTileClippingMasks(const RenderTiles& renderTiles) {
     // values remain set somewhere in it. Otherwise we can continue to overwrite it incrementally.
     const auto count = renderTiles->size();
     if (nextStencilID + count > maxStencilValue) {
-        clearStencil();
+        clearStencil(layerIndex);
     }
 
 #if MLN_RENDER_BACKEND_METAL
@@ -200,7 +200,7 @@ void PaintParameters::renderTileClippingMasks(const RenderTiles& renderTiles) {
 
     if (!tileUBOs.empty()) {
 #if !defined(NDEBUG)
-        const auto debugGroup = renderPass->createDebugGroup("tile-clip-masks");
+        const auto debugGroup = renderPass->createDebugGroup(layerIndex, "tile-clip-masks");
 #endif
 
         auto& mtlContext = static_cast<mtl::Context&>(context);
@@ -234,11 +234,11 @@ void PaintParameters::renderTileClippingMasks(const RenderTiles& renderTiles) {
 
     if (!tileUBOs.empty()) {
 #if !defined(NDEBUG)
-        const auto debugGroup = renderPass->createDebugGroup("tile-clip-masks");
+        const auto debugGroup = renderPass->createDebugGroup(layerIndex, "tile-clip-masks");
 #endif
 
         auto& vulkanContext = static_cast<vulkan::Context&>(context);
-        vulkanContext.renderTileClippingMasks(*renderPass, staticData, tileUBOs);
+        vulkanContext.renderTileClippingMasks(layerIndex, *renderPass, staticData, tileUBOs);
         vulkanContext.renderingStats().stencilUpdates++;
     }
 
@@ -308,9 +308,9 @@ gfx::StencilMode PaintParameters::stencilModeForClipping(const UnwrappedTileID& 
                             gfx::StencilOpType::Replace};
 }
 
-gfx::StencilMode PaintParameters::stencilModeFor3D() {
+gfx::StencilMode PaintParameters::stencilModeFor3D(std::int32_t layerIndex) {
     if (nextStencilID + 1 > maxStencilValue) {
-        clearStencil();
+        clearStencil(layerIndex);
     }
 
     // We're potentially destroying the stencil clipping mask in this pass. That
