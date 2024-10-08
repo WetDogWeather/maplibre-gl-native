@@ -22,22 +22,6 @@ RenderPass::RenderPass(CommandEncoder& commandEncoder_,
     context.performCleanup();
 }
 
-vk::RenderPassBeginInfo RenderPass::getInfo() const {
-    std::array<vk::ClearValue, 2> clearValues;
-    if (descriptor.clearColor.has_value()) {
-        clearValues[0].setColor(descriptor.clearColor.value().operator std::array<float, 4>());
-    }
-    clearValues[1].depthStencil.setDepth(descriptor.clearDepth.value_or(1.0f));
-    clearValues[1].depthStencil.setStencil(descriptor.clearStencil.value_or(0));
-
-    auto& resource = descriptor.renderable.getResource<RenderableResource>();
-    return vk::RenderPassBeginInfo()
-        .setRenderPass(resource.getRenderPass().get())
-        .setFramebuffer(resource.getFramebuffer().get())
-        .setRenderArea({{0, 0}, resource.getExtent()})
-        .setClearValues(clearValues);
-}
-
 RenderPass::~RenderPass() {
     endEncoding();
 

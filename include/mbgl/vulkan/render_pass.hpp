@@ -29,8 +29,6 @@ public:
     void bindVertex(const BufferResource&, std::size_t offset, std::size_t index, std::size_t size = 0);
     void bindFragment(const BufferResource&, std::size_t offset, std::size_t index, std::size_t size = 0);
 
-    vk::RenderPassBeginInfo getInfo() const;
-
 private:
     void pushDebugGroup(std::int32_t layerIndex, const char* name) override;
     void popDebugGroup(std::int32_t layerIndex) override;

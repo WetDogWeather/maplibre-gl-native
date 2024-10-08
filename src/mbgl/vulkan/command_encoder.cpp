@@ -18,13 +18,12 @@ std::unique_ptr<gfx::UploadPass> CommandEncoder::createUploadPass(const char* na
 
 std::unique_ptr<gfx::RenderPass> CommandEncoder::createRenderPass(const char* name,
                                                                   const gfx::RenderPassDescriptor& descriptor) {
-    auto renderPass = std::make_unique<RenderPass>(*this, name, descriptor, context);
-    renderPassInfo = renderPass->getInfo();
-    return renderPass;
+    renderPassDescriptor.emplace(descriptor);
+    return std::make_unique<RenderPass>(*this, name, descriptor, context);
 }
 
 const vk::UniqueCommandBuffer& CommandEncoder::getCommandBuffer(std::int32_t layerIndex) {
-    return context.getCommandBuffer(layerIndex, renderPassInfo);
+    return context.getCommandBuffer(layerIndex, renderPassDescriptor);
 }
 
 void CommandEncoder::present(gfx::Renderable& renderable) {

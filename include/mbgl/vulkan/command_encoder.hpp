@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mbgl/gfx/command_encoder.hpp>
+#include <mbgl/gfx/render_pass.hpp>
 #include <mbgl/util/containers.hpp>
 #include <mbgl/vulkan/renderer_backend.hpp>
 
@@ -27,8 +28,6 @@ public:
     std::unique_ptr<gfx::UploadPass> createUploadPass(const char* name, gfx::Renderable&) override;
     std::unique_ptr<gfx::RenderPass> createRenderPass(const char* name, const gfx::RenderPassDescriptor&) override;
 
-    void setRenderPassInfo(vk::RenderPassBeginInfo info) { renderPassInfo.emplace(std::move(info)); }
-
     void present(gfx::Renderable&) override;
 
     void endEncoding() const;
@@ -43,7 +42,7 @@ private:
     friend class UploadPass;
 
     vulkan::Context& context;
-    std::optional<vk::RenderPassBeginInfo> renderPassInfo;
+    std::optional<gfx::RenderPassDescriptor> renderPassDescriptor;
 };
 
 } // namespace vulkan

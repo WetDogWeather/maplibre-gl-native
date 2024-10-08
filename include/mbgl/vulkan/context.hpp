@@ -148,7 +148,7 @@ public:
     void submitOneTimeCommand(const std::function<void(const vk::UniqueCommandBuffer&)>& function);
 
     const vk::UniqueCommandBuffer& getCommandBuffer(std::int32_t layerIndex,
-                                                    const std::optional<vk::RenderPassBeginInfo>&);
+                                                    const std::optional<gfx::RenderPassDescriptor>&);
 
     void endEncoding();
 

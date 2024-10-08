@@ -300,7 +300,7 @@ std::unique_ptr<gfx::CommandEncoder> Context::createCommandEncoder() {
 }
 
 const vk::UniqueCommandBuffer& Context::getCommandBuffer(std::int32_t layerIndex,
-                                                         const std::optional<vk::RenderPassBeginInfo>& renderPassInfo) {
+                                                         const std::optional<gfx::RenderPassDescriptor>& descriptor) {
     auto& frame = frameResources[frameResourceIndex];
     frame.commandBuffers.resize(std::max<std::size_t>(frame.commandBuffers.size(), layerIndex + 1));
     frame.bufferHasRenderPass.resize(frame.commandBuffers.size());
@@ -317,9 +317,23 @@ const vk::UniqueCommandBuffer& Context::getCommandBuffer(std::int32_t layerIndex
 
         buffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
     }
-    if (renderPassInfo && !frame.bufferHasRenderPass[layerIndex]) {
+    if (descriptor && !frame.bufferHasRenderPass[layerIndex]) {
+        std::array<vk::ClearValue, 2> clearValues;
+        if (descriptor->clearColor.has_value()) {
+            clearValues[0].setColor(descriptor->clearColor.value().operator std::array<float, 4>());
+        }
+        clearValues[1].depthStencil.setDepth(descriptor->clearDepth.value_or(1.0f));
+        clearValues[1].depthStencil.setStencil(descriptor->clearStencil.value_or(0));
+
+        auto& resource = descriptor->renderable.getResource<RenderableResource>();
+        auto renderPassInfo = vk::RenderPassBeginInfo()
+                                  .setRenderPass(resource.getRenderPass().get())
+                                  .setFramebuffer(resource.getFramebuffer().get())
+                                  .setRenderArea({{0, 0}, resource.getExtent()})
+                                  .setClearValues(clearValues);
+
+        buffer->beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
         frame.bufferHasRenderPass[layerIndex] = true;
-        buffer->beginRenderPass(*renderPassInfo, vk::SubpassContents::eInline);
     }
     return buffer;
 }
