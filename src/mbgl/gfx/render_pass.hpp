@@ -27,16 +27,16 @@ protected:
     RenderPass() = default;
 
     friend class DebugGroup<RenderPass>;
-    virtual void pushDebugGroup(std::int32_t layerIndex, const char* name) = 0;
-    virtual void popDebugGroup(std::int32_t layerIndex) = 0;
-    virtual void addDebugSignpost(std::int32_t, const char*) {}
+    virtual void pushDebugGroup(std::optional<std::int32_t> layerIndex, const char* name) = 0;
+    virtual void popDebugGroup(std::optional<std::int32_t> layerIndex) = 0;
+    virtual void addDebugSignpost(std::optional<std::int32_t>, const char*) {}
 
 public:
     virtual ~RenderPass() = default;
     RenderPass(const RenderPass&) = delete;
     RenderPass& operator=(const RenderPass&) = delete;
 
-    DebugGroup<RenderPass> createDebugGroup(std::int32_t layerIndex, const char* name) {
+    DebugGroup<RenderPass> createDebugGroup(std::optional<std::int32_t> layerIndex, const char* name) {
         return {*this, layerIndex, name};
     }
 };

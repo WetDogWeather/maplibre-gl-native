@@ -241,7 +241,7 @@ void Drawable::draw(PaintParameters& parameters) const {
     auto& context = static_cast<Context&>(parameters.context);
     auto& renderPass_ = static_cast<RenderPass&>(*parameters.renderPass);
     auto& encoder = renderPass_.getEncoder();
-    auto& commandBuffer = encoder.getCommandBuffer(getLayerIndex());
+    auto& commandBuffer = encoder.getSecondaryCommandBuffer(getLayerIndex());
 
     auto& shaderImpl = static_cast<mbgl::vulkan::ShaderProgram&>(*shader);
 
@@ -392,7 +392,7 @@ void Drawable::buildVulkanInputBindings() noexcept {
 bool Drawable::bindAttributes(CommandEncoder& encoder) const noexcept {
     if (impl->vulkanVertexBuffers.empty()) return false;
 
-    const auto& commandBuffer = encoder.getCommandBuffer(getLayerIndex());
+    const auto& commandBuffer = encoder.getSecondaryCommandBuffer(getLayerIndex());
 
     commandBuffer->bindVertexBuffers(0, impl->vulkanVertexBuffers, impl->vulkanVertexOffsets);
 
@@ -480,7 +480,7 @@ bool Drawable::bindDescriptors(CommandEncoder& encoder) const noexcept {
 
     if (drawableDescriptorSets.empty()) return true;
 
-    const auto& commandBuffer = encoder.getCommandBuffer(getLayerIndex());
+    const auto& commandBuffer = encoder.getSecondaryCommandBuffer(getLayerIndex());
     commandBuffer->bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics, context.getGeneralPipelineLayout().get(), 0, drawableDescriptorSets, nullptr);
 

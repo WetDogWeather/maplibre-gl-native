@@ -18,12 +18,19 @@ std::unique_ptr<gfx::UploadPass> CommandEncoder::createUploadPass(const char* na
 
 std::unique_ptr<gfx::RenderPass> CommandEncoder::createRenderPass(const char* name,
                                                                   const gfx::RenderPassDescriptor& descriptor) {
-    renderPassDescriptor.emplace(descriptor);
     return std::make_unique<RenderPass>(*this, name, descriptor, context);
 }
 
-const vk::UniqueCommandBuffer& CommandEncoder::getCommandBuffer(std::int32_t layerIndex) {
-    return context.getCommandBuffer(layerIndex, renderPassDescriptor);
+const vk::UniqueCommandBuffer& CommandEncoder::getPrimaryCommandBuffer() const {
+    return context.getPrimaryCommandBuffer();
+}
+
+const vk::UniqueCommandBuffer& CommandEncoder::getUploadCommandBuffer() const {
+    return context.getUploadCommandBuffer();
+}
+
+const vk::UniqueCommandBuffer& CommandEncoder::getSecondaryCommandBuffer(std::int32_t layerIndex) {
+    return context.getSecondaryCommandBuffer(layerIndex);
 }
 
 void CommandEncoder::present(gfx::Renderable& renderable) {
@@ -34,16 +41,20 @@ void CommandEncoder::endEncoding() const {
     context.endEncoding();
 }
 
-void CommandEncoder::pushDebugGroup(std::int32_t layerIndex, const char* name) {
+void CommandEncoder::pushDebugGroup(std::optional<std::int32_t> layerIndex, const char* name) {
     pushDebugGroup(layerIndex, name, {});
 }
 
-void CommandEncoder::pushDebugGroup(std::int32_t layerIndex, const char* name, const std::array<float, 4>& color) {
-    context.getBackend().beginDebugLabel(getCommandBuffer(layerIndex).get(), name, color);
+void CommandEncoder::pushDebugGroup(std::optional<std::int32_t> layerIndex,
+                                    const char* name,
+                                    const std::array<float, 4>& color) {
+    auto& buffer = layerIndex ? getSecondaryCommandBuffer(*layerIndex) : getPrimaryCommandBuffer();
+    context.getBackend().beginDebugLabel(buffer.get(), name, color);
 }
 
-void CommandEncoder::popDebugGroup(std::int32_t layerIndex) {
-    context.getBackend().endDebugLabel(getCommandBuffer(layerIndex).get());
+void CommandEncoder::popDebugGroup(std::optional<std::int32_t> layerIndex) {
+    auto& buffer = layerIndex ? getSecondaryCommandBuffer(*layerIndex) : getPrimaryCommandBuffer();
+    context.getBackend().endDebugLabel(buffer.get());
 }
 
 } // namespace vulkan

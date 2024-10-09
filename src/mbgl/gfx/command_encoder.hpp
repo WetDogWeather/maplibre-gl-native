@@ -18,18 +18,18 @@ protected:
     explicit CommandEncoder() = default;
 
     friend class DebugGroup<CommandEncoder>;
-    virtual void pushDebugGroup(std::int32_t layerIndex, const char* name) = 0;
-    virtual void popDebugGroup(std::int32_t layerIndex) = 0;
+    virtual void pushDebugGroup(std::optional<std::int32_t> layerIndex, const char* name) = 0;
+    virtual void popDebugGroup(std::optional<std::int32_t> layerIndex) = 0;
 
 public:
     virtual ~CommandEncoder() = default;
     CommandEncoder(const CommandEncoder&) = delete;
     CommandEncoder& operator=(const CommandEncoder&) = delete;
 
-    DebugGroup<CommandEncoder> createDebugGroup(std::int32_t layerIndex, const char* name) {
+    DebugGroup<CommandEncoder> createDebugGroup(std::optional<std::int32_t> layerIndex, const char* name) {
         return {*this, layerIndex, name};
     }
-    DebugGroup<CommandEncoder> createDebugGroup(std::int32_t layerIndex, std::string_view name) {
+    DebugGroup<CommandEncoder> createDebugGroup(std::optional<std::int32_t> layerIndex, std::string_view name) {
         return createDebugGroup(layerIndex, name.data());
     }
 

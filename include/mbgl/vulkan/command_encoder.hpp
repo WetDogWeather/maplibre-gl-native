@@ -23,7 +23,13 @@ public:
 
     vulkan::Context& getContext() { return context; }
     const vulkan::Context& getContext() const { return context; }
-    const vk::UniqueCommandBuffer& getCommandBuffer(std::int32_t layerIndex);
+
+    /// The primary command buffer which contains the render pass and the secondary buffers
+    const vk::UniqueCommandBuffer& getPrimaryCommandBuffer() const;
+    /// The secondary command buffer used for uploads
+    const vk::UniqueCommandBuffer& getUploadCommandBuffer() const;
+    /// The secondary command buffer for a given layer, which are encoded, in order, into the primary command buffer
+    const vk::UniqueCommandBuffer& getSecondaryCommandBuffer(std::int32_t layerIndex);
 
     std::unique_ptr<gfx::UploadPass> createUploadPass(const char* name, gfx::Renderable&) override;
     std::unique_ptr<gfx::RenderPass> createRenderPass(const char* name, const gfx::RenderPassDescriptor&) override;
@@ -33,16 +39,15 @@ public:
     void endEncoding() const;
 
 private:
-    void pushDebugGroup(std::int32_t layerIndex, const char* name) override;
-    void pushDebugGroup(std::int32_t layerIndex, const char* name, const std::array<float, 4>& color);
-    void popDebugGroup(std::int32_t layerIndex) override;
+    void pushDebugGroup(std::optional<std::int32_t> layerIndex, const char* name) override;
+    void pushDebugGroup(std::optional<std::int32_t> layerIndex, const char* name, const std::array<float, 4>& color);
+    void popDebugGroup(std::optional<std::int32_t> layerIndex) override;
 
 private:
     friend class RenderPass;
     friend class UploadPass;
 
     vulkan::Context& context;
-    std::optional<gfx::RenderPassDescriptor> renderPassDescriptor;
 };
 
 } // namespace vulkan

@@ -24,14 +24,14 @@ public:
 
     void clearStencil(std::int32_t layerIndex, uint32_t value = 0) const;
 
-    void addDebugSignpost(std::int32_t layerIndex, const char* name) override;
+    void addDebugSignpost(std::optional<std::int32_t> layerIndex, const char* name) override;
 
     void bindVertex(const BufferResource&, std::size_t offset, std::size_t index, std::size_t size = 0);
     void bindFragment(const BufferResource&, std::size_t offset, std::size_t index, std::size_t size = 0);
 
 private:
-    void pushDebugGroup(std::int32_t layerIndex, const char* name) override;
-    void popDebugGroup(std::int32_t layerIndex) override;
+    void pushDebugGroup(std::optional<std::int32_t> layerIndex, const char* name) override;
+    void popDebugGroup(std::optional<std::int32_t> layerIndex) override;
 
 private:
     gfx::RenderPassDescriptor descriptor;

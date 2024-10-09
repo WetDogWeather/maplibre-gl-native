@@ -218,7 +218,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         const auto uploadPass = parameters.encoder->createUploadPass("upload",
                                                                      parameters.backend.getDefaultRenderable());
 #if !defined(NDEBUG)
-        const auto debugGroup = uploadPass->createDebugGroup(0, "upload");
+        const auto debugGroup = uploadPass->createDebugGroup({}, "upload");
 #endif
 
         // Update all clipping IDs + upload buckets.
@@ -248,7 +248,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         const auto uploadPass = parameters.encoder->createUploadPass("layerGroup-upload",
                                                                      parameters.backend.getDefaultRenderable());
 #if !defined(NDEBUG)
-        const auto debugGroup = uploadPass->createDebugGroup(0, "layerGroup-upload");
+        const auto debugGroup = uploadPass->createDebugGroup({}, "layerGroup-upload");
 #endif
 
         // Tweakers are run in the upload pass so they can set up uniforms.
@@ -367,7 +367,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 #if MLN_DRAWABLE_RENDERER
     // Drawables
     const auto drawableOpaquePass = [&] {
-        const auto debugGroup(parameters.renderPass->createDebugGroup(0, "drawables-opaque"));
+        const auto debugGroup(parameters.renderPass->createDebugGroup({}, "drawables-opaque"));
         const auto maxLayerIndex = orchestrator.maxLayerIndex();
         parameters.pass = RenderPass::Opaque;
         parameters.currentLayer = 0;
@@ -382,7 +382,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
     };
 
     const auto drawableTranslucentPass = [&] {
-        const auto debugGroup(parameters.renderPass->createDebugGroup(0, "drawables-translucent"));
+        const auto debugGroup(parameters.renderPass->createDebugGroup({}, "drawables-translucent"));
         const auto maxLayerIndex = orchestrator.maxLayerIndex();
         parameters.pass = RenderPass::Translucent;
         parameters.depthRangeSize = 1 -
@@ -412,7 +412,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 #if MLN_LEGACY_RENDERER
     // Render everything top-to-bottom by using reverse iterators. Render opaque objects first.
     const auto renderLayerOpaquePass = [&] {
-        const auto debugGroup(parameters.renderPass->createDebugGroup("opaque"));
+        const auto debugGroup(parameters.renderPass->createDebugGroup({}, "opaque"));
         parameters.pass = RenderPass::Opaque;
         parameters.depthRangeSize = 1 - (layerRenderItems.size() + 2) * PaintParameters::numSublayers *
                                             PaintParameters::depthEpsilon;
@@ -430,7 +430,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
     // Make a second pass, rendering translucent objects. This time, we render bottom-to-top.
     const auto renderLayerTranslucentPass = [&] {
-        const auto debugGroup(parameters.renderPass->createDebugGroup("translucent"));
+        const auto debugGroup(parameters.renderPass->createDebugGroup({}, "translucent"));
         parameters.pass = RenderPass::Translucent;
         parameters.depthRangeSize = 1 - (layerRenderItems.size() + 2) * PaintParameters::numSublayers *
                                             PaintParameters::depthEpsilon;
@@ -451,7 +451,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
     const auto drawableDebugOverlays = [&] {
         // Renders debug overlays.
         {
-            const auto debugGroup(parameters.renderPass->createDebugGroup(0, "debug"));
+            const auto debugGroup(parameters.renderPass->createDebugGroup({}, "debug"));
             orchestrator.visitDebugLayerGroups([&](LayerGroupBase& layerGroup) {
                 visitLayerGroupDrawables(layerGroup, [&](gfx::Drawable& drawable) {
                     for (const auto& tweaker : drawable.getTweakers()) {
@@ -468,7 +468,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
     const auto renderDebugOverlays = [&] {
         // Renders debug overlays.
         {
-            const auto debugGroup(parameters.renderPass->createDebugGroup("debug"));
+            const auto debugGroup(parameters.renderPass->createDebugGroup({}, "debug"));
 
             // Finalize the rendering, e.g. by calling debug render calls per tile.
             // This guarantees that we have at least one function per tile called.

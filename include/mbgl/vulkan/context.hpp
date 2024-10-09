@@ -147,8 +147,13 @@ public:
     void enqueueDeletion(std::function<void(const Context&)>&& function);
     void submitOneTimeCommand(const std::function<void(const vk::UniqueCommandBuffer&)>& function);
 
-    const vk::UniqueCommandBuffer& getCommandBuffer(std::int32_t layerIndex,
-                                                    const std::optional<gfx::RenderPassDescriptor>&);
+    const vk::UniqueCommandBuffer& getPrimaryCommandBuffer() const {
+        return frameResources[frameResourceIndex].primaryCommandBuffer;
+    }
+    const vk::UniqueCommandBuffer& getUploadCommandBuffer() const {
+        return frameResources[frameResourceIndex].uploadCommandBuffer;
+    }
+    const vk::UniqueCommandBuffer& getSecondaryCommandBuffer(std::int32_t layerIndex);
 
     void endEncoding();
 
@@ -156,8 +161,9 @@ public:
 
 private:
     struct FrameResources {
-        std::vector<vk::UniqueCommandBuffer> commandBuffers;
-        std::vector<bool> bufferHasRenderPass;
+        vk::UniqueCommandBuffer primaryCommandBuffer;
+        vk::UniqueCommandBuffer uploadCommandBuffer;
+        std::vector<vk::UniqueCommandBuffer> secondaryCommandBuffers;
         vk::UniqueDescriptorPool descriptorPool;
 
         vk::UniqueSemaphore surfaceSemaphore;
@@ -166,11 +172,15 @@ private:
 
         std::vector<std::function<void(const Context&)>> deletionQueue;
 
-        FrameResources(vk::UniqueDescriptorPool&& dp,
+        FrameResources(vk::UniqueCommandBuffer&& pcb,
+                       vk::UniqueCommandBuffer&& ucb,
+                       vk::UniqueDescriptorPool&& dp,
                        vk::UniqueSemaphore&& surf,
                        vk::UniqueSemaphore&& frame,
                        vk::UniqueFence&& flight)
-            : descriptorPool(std::move(dp)),
+            : primaryCommandBuffer(std::move(pcb)),
+              uploadCommandBuffer(std::move(ucb)),
+              descriptorPool(std::move(dp)),
               surfaceSemaphore(std::move(surf)),
               frameSemaphore(std::move(frame)),
               flightFrameFence(std::move(flight)) {}

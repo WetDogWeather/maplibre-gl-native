@@ -35,18 +35,18 @@ protected:
     UploadPass() = default;
 
     friend class DebugGroup<UploadPass>;
-    virtual void pushDebugGroup(std::int32_t layerIndex, const char* name) = 0;
-    virtual void popDebugGroup(std::int32_t layerIndex) = 0;
+    virtual void pushDebugGroup(std::optional<std::int32_t> layerIndex, const char* name) = 0;
+    virtual void popDebugGroup(std::optional<std::int32_t> layerIndex) = 0;
 
 public:
     virtual ~UploadPass() = default;
     UploadPass(const UploadPass&) = delete;
     UploadPass& operator=(const UploadPass&) = delete;
 
-    DebugGroup<UploadPass> createDebugGroup(std::int32_t layerIndex, const char* name) {
+    DebugGroup<UploadPass> createDebugGroup(std::optional<std::int32_t> layerIndex, const char* name) {
         return {*this, layerIndex, name};
     }
-    DebugGroup<UploadPass> createDebugGroup(std::int32_t layerIndex, std::string_view name) {
+    DebugGroup<UploadPass> createDebugGroup(std::optional<std::int32_t> layerIndex, std::string_view name) {
         return createDebugGroup(layerIndex, name.data());
     }
 

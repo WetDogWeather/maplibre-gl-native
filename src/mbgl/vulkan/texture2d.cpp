@@ -137,7 +137,7 @@ void Texture2D::upload(const void* pixelData, const Size& size_) noexcept {
 
 void Texture2D::uploadSubRegion(const void* pixelData, const Size& size_, uint16_t xOffset, uint16_t yOffset) noexcept {
     if (pixelData && size_.width > 0 && size_.height > 0) {
-        uploadSubRegion(pixelData, size_, xOffset, yOffset, context.getCommandBuffer(0, {}));
+        uploadSubRegion(pixelData, size_, xOffset, yOffset, context.getUploadCommandBuffer());
     }
 }
 

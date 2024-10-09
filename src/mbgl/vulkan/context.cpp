@@ -70,6 +70,11 @@ void Context::initFrameResources() {
     const auto& device = backend.getDevice();
     const auto frameCount = backend.getMaxFrames();
 
+    auto primaryCommandBuffers = backend.getDevice()->allocateCommandBuffersUnique(
+        {backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, frameCount});
+    auto uploadCommandBuffers = backend.getDevice()->allocateCommandBuffersUnique(
+        {backend.getCommandPool().get(), vk::CommandBufferLevel::eSecondary, frameCount});
+
     // descriptor pool info
     const std::vector<vk::DescriptorPoolSize> poolSizes = {
         {vk::DescriptorType::eUniformBuffer, MLN_VULKAN_DESCRIPTOR_POOL_SIZE},
@@ -82,13 +87,16 @@ void Context::initFrameResources() {
     frameResources.reserve(frameCount);
 
     for (uint32_t index = 0; index < frameCount; ++index) {
-        frameResources.emplace_back(device->createDescriptorPoolUnique(descriptorPoolInfo),
+        frameResources.emplace_back(std::move(primaryCommandBuffers[index]),
+                                    std::move(uploadCommandBuffers[index]),
+                                    device->createDescriptorPoolUnique(descriptorPoolInfo),
                                     device->createSemaphoreUnique({}),
                                     device->createSemaphoreUnique({}),
                                     device->createFenceUnique(vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled)));
 
         const auto& frame = frameResources.back();
 
+        backend.setDebugName(frame.primaryCommandBuffer.get(), "FrameCommandBuffer_" + std::to_string(index));
         backend.setDebugName(frame.descriptorPool.get(), "DescriptorPool_" + std::to_string(index));
         backend.setDebugName(frame.frameSemaphore.get(), "FrameSemaphore_" + std::to_string(index));
         backend.setDebugName(frame.surfaceSemaphore.get(), "SurfaceSemaphore_" + std::to_string(index));
@@ -216,13 +224,24 @@ void Context::beginFrame() {
         renderableResource.setAcquiredImageIndex(frameResourceIndex);
     }
 
-    for (auto& buffer : frame.commandBuffers) {
+    frame.primaryCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+    frame.primaryCommandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+
+    frame.uploadCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+
+    auto inheritInfo = vk::CommandBufferInheritanceInfo{}
+                           .setRenderPass(renderableResource.getRenderPass().get())
+                           .setFramebuffer(renderableResource.getFramebuffer().get());
+    frame.uploadCommandBuffer->begin(vk::CommandBufferBeginInfo{}
+                                         .setFlags(vk::CommandBufferUsageFlagBits::eRenderPassContinue)
+                                         .setPInheritanceInfo(&inheritInfo));
+
+    for (auto& buffer : frame.secondaryCommandBuffers) {
         if (buffer) {
             buffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
-            buffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+            buffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eRenderPassContinue));
         }
     }
-    std::fill(frame.bufferHasRenderPass.begin(), frame.bufferHasRenderPass.end(), false);
 
     backend.getThreadPool().runRenderJobs();
 }
@@ -238,40 +257,24 @@ void Context::submitFrame() {
     const auto& platformSurface = renderableResource.getPlatformSurface();
     const auto& frame = frameResources[frameResourceIndex];
 
-    for (auto& buffer : frame.commandBuffers) {
-        if (buffer) {
-            buffer->end();
-        }
-    }
+    frame.primaryCommandBuffer->end();
 
     const vk::Result resetFenceResult = device->resetFences(1, &frame.flightFrameFence.get());
     if (resetFenceResult != vk::Result::eSuccess) {
         mbgl::Log::Error(mbgl::Event::Render, "Reset fence failed");
     }
 
-    // submit frame commands
     if (platformSurface) {
-        std::vector<vk::CommandBuffer> validBuffers;
-        for (std::size_t i = 0; i < frame.commandBuffers.size(); ++i) {
-            if (auto& buffer = frame.commandBuffers[i]; buffer && frame.bufferHasRenderPass[i]) {
-                validBuffers.push_back(buffer.get());
-            }
-        }
-
-        auto submitInfo = vk::SubmitInfo();
-        if (!validBuffers.empty()) {
-            submitInfo.setCommandBuffers({static_cast<uint32_t>(validBuffers.size()), validBuffers.data()});
-        }
-
+        // submit frame commands
         const vk::PipelineStageFlags waitStageMask[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
-        submitInfo.setSignalSemaphores(frame.frameSemaphore.get())
-            .setWaitSemaphores(frame.surfaceSemaphore.get())
-            .setWaitDstStageMask(waitStageMask);
+        auto submitInfo = vk::SubmitInfo()
+                              .setCommandBuffers(frame.primaryCommandBuffer.get())
+                              .setSignalSemaphores(frame.frameSemaphore.get())
+                              .setWaitSemaphores(frame.surfaceSemaphore.get())
+                              .setWaitDstStageMask(waitStageMask);
         graphicsQueue.submit(submitInfo, frame.flightFrameFence.get());
-    }
 
-    // present rendered frame
-    if (platformSurface) {
+        // present rendered frame
         const auto acquiredImage = renderableResource.getAcquiredImageIndex();
         const auto presentInfo = vk::PresentInfoKHR()
                                      .setSwapchains(renderableResource.getSwapchain().get())
@@ -299,50 +302,52 @@ std::unique_ptr<gfx::CommandEncoder> Context::createCommandEncoder() {
     return std::make_unique<CommandEncoder>(*this);
 }
 
-const vk::UniqueCommandBuffer& Context::getCommandBuffer(std::int32_t layerIndex,
-                                                         const std::optional<gfx::RenderPassDescriptor>& descriptor) {
+const vk::UniqueCommandBuffer& Context::getSecondaryCommandBuffer(std::int32_t layerIndex) {
     auto& frame = frameResources[frameResourceIndex];
-    frame.commandBuffers.resize(std::max<std::size_t>(frame.commandBuffers.size(), layerIndex + 1));
-    frame.bufferHasRenderPass.resize(frame.commandBuffers.size());
+    frame.secondaryCommandBuffers.resize(std::max<std::size_t>(frame.secondaryCommandBuffers.size(), layerIndex + 1));
 
-    vk::UniqueCommandBuffer& buffer = frame.commandBuffers[layerIndex];
+    vk::UniqueCommandBuffer& buffer = frame.secondaryCommandBuffers[layerIndex];
     if (!buffer) {
-        const vk::CommandBufferAllocateInfo allocateInfo(
-            backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, 1);
-        buffer = std::move(backend.getDevice()->allocateCommandBuffersUnique(allocateInfo)[0]);
+        auto& pool = backend.getCommandPool();
+        const vk::CommandBufferAllocateInfo allocateInfo(pool.get(), vk::CommandBufferLevel::eSecondary, 1);
+        buffer = std::move(backend.getDevice()->allocateCommandBuffersUnique(allocateInfo).front());
 
         backend.setDebugName(
             buffer.get(),
             "FrameCommandBuffer_" + util::toString(frameResourceIndex) + "_" + util::toString(layerIndex));
 
-        buffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
-    }
-    if (descriptor && !frame.bufferHasRenderPass[layerIndex]) {
-        std::array<vk::ClearValue, 2> clearValues;
-        if (descriptor->clearColor.has_value()) {
-            clearValues[0].setColor(descriptor->clearColor.value().operator std::array<float, 4>());
-        }
-        clearValues[1].depthStencil.setDepth(descriptor->clearDepth.value_or(1.0f));
-        clearValues[1].depthStencil.setStencil(descriptor->clearStencil.value_or(0));
-
-        auto& resource = descriptor->renderable.getResource<RenderableResource>();
-        auto renderPassInfo = vk::RenderPassBeginInfo()
-                                  .setRenderPass(resource.getRenderPass().get())
-                                  .setFramebuffer(resource.getFramebuffer().get())
-                                  .setRenderArea({{0, 0}, resource.getExtent()})
-                                  .setClearValues(clearValues);
-
-        buffer->beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
-        frame.bufferHasRenderPass[layerIndex] = true;
+        auto& renderableResource = backend.getDefaultRenderable().getResource<SurfaceRenderableResource>();
+        auto inheritInfo = vk::CommandBufferInheritanceInfo{}
+                               .setRenderPass(renderableResource.getRenderPass().get())
+                               .setFramebuffer(renderableResource.getFramebuffer().get())
+                               .setSubpass(0)
+                               .setPNext(nullptr)
+                               .setQueryFlags(vk::QueryControlFlags{})
+                               .setPipelineStatistics(vk::QueryPipelineStatisticFlags{})
+                               .setOcclusionQueryEnable(false);
+        auto beginInfo = vk::CommandBufferBeginInfo{}
+                             .setFlags(vk::CommandBufferUsageFlagBits::eRenderPassContinue)
+                             .setPInheritanceInfo(&inheritInfo);
+        buffer->begin(beginInfo);
     }
     return buffer;
 }
 
 void Context::endEncoding() {
     auto& frame = frameResources[frameResourceIndex];
-    for (auto& buffer : frame.commandBuffers) {
-        buffer->endRenderPass();
+
+    frame.uploadCommandBuffer->end();
+    frame.primaryCommandBuffer->executeCommands(frame.uploadCommandBuffer.get());
+
+    // Encode each secondary buffer into the primary
+    for (auto& buffer : frame.secondaryCommandBuffers) {
+        if (buffer) {
+            buffer->end();
+            frame.primaryCommandBuffer->executeCommands(buffer.get());
+        }
     }
+
+    frame.primaryCommandBuffer->endRenderPass();
 }
 
 BufferResource Context::createBuffer(const void* data, std::size_t size, std::uint32_t usage, bool persistent) const {
@@ -510,7 +515,7 @@ bool Context::renderTileClippingMasks(std::int32_t layerIndex,
 
     auto& shaderImpl = static_cast<ShaderProgram&>(*clipping.shader);
     auto& renderPassImpl = static_cast<RenderPass&>(renderPass);
-    auto& commandBuffer = renderPassImpl.getEncoder().getCommandBuffer(layerIndex);
+    auto& commandBuffer = renderPassImpl.getEncoder().getSecondaryCommandBuffer(layerIndex);
 
     clipping.pipelineInfo.setRenderable(renderPassImpl.getDescriptor().renderable);
 

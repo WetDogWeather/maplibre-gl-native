@@ -17,7 +17,23 @@ RenderPass::RenderPass(CommandEncoder& commandEncoder_,
     auto& resource = descriptor.renderable.getResource<RenderableResource>();
     resource.bind();
 
-    pushDebugGroup(0, name);
+    std::array<vk::ClearValue, 2> clearValues;
+
+    if (descriptor.clearColor.has_value())
+        clearValues[0].setColor(descriptor.clearColor.value().operator std::array<float, 4>());
+    clearValues[1].depthStencil.setDepth(descriptor.clearDepth.value_or(1.0f));
+    clearValues[1].depthStencil.setStencil(descriptor.clearStencil.value_or(0));
+
+    const auto renderPassBeginInfo = vk::RenderPassBeginInfo()
+                                         .setRenderPass(resource.getRenderPass().get())
+                                         .setFramebuffer(resource.getFramebuffer().get())
+                                         .setRenderArea({{0, 0}, resource.getExtent()})
+                                         .setClearValues(clearValues);
+
+    pushDebugGroup({}, name);
+
+    commandEncoder.getPrimaryCommandBuffer()->beginRenderPass(renderPassBeginInfo,
+                                                              vk::SubpassContents::eSecondaryCommandBuffers);
 
     context.performCleanup();
 }
@@ -25,7 +41,7 @@ RenderPass::RenderPass(CommandEncoder& commandEncoder_,
 RenderPass::~RenderPass() {
     endEncoding();
 
-    popDebugGroup(0);
+    popDebugGroup({});
 }
 
 void RenderPass::endEncoding() {
@@ -43,19 +59,21 @@ void RenderPass::clearStencil(std::int32_t layerIndex, uint32_t value) const {
     const auto rect = vk::ClearRect().setBaseArrayLayer(0).setLayerCount(1).setRect(
         {{0, 0}, {extent.width, extent.height}});
 
-    commandEncoder.getCommandBuffer(layerIndex)->clearAttachments(attach, rect);
+    commandEncoder.getSecondaryCommandBuffer(layerIndex)->clearAttachments(attach, rect);
 }
 
-void RenderPass::pushDebugGroup(std::int32_t layerIndex, const char* name) {
+void RenderPass::pushDebugGroup(std::optional<std::int32_t> layerIndex, const char* name) {
     commandEncoder.pushDebugGroup(layerIndex, name);
 }
 
-void RenderPass::popDebugGroup(std::int32_t layerIndex) {
+void RenderPass::popDebugGroup(std::optional<std::int32_t> layerIndex) {
     commandEncoder.popDebugGroup(layerIndex);
 }
 
-void RenderPass::addDebugSignpost(std::int32_t layerIndex, const char* name) {
-    commandEncoder.getContext().getBackend().insertDebugLabel(commandEncoder.getCommandBuffer(layerIndex).get(), name);
+void RenderPass::addDebugSignpost(std::optional<std::int32_t> layerIndex, const char* name) {
+    auto& buffer = layerIndex ? commandEncoder.getSecondaryCommandBuffer(*layerIndex)
+                              : commandEncoder.getPrimaryCommandBuffer();
+    commandEncoder.getContext().getBackend().insertDebugLabel(buffer.get(), name);
 }
 
 void RenderPass::bindVertex(const BufferResource& buf, std::size_t offset, std::size_t, std::size_t size) {
