@@ -191,14 +191,26 @@ void Context::beginFrame() {
     backend.startFrameCapture();
 
     auto& frame = frameResources[frameResourceIndex];
-    constexpr uint64_t timeout = std::numeric_limits<uint64_t>::max();
 
     waitFrame();
+
+    frame.primaryCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+    frame.primaryCommandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+
+    frame.uploadCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+    frame.uploadCommandBuffer->begin(vk::CommandBufferBeginInfo{vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+
+    for (auto& buffer : frame.secondaryCommandBuffers) {
+        if (buffer) {
+            buffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+        }
+    }
 
     device->resetDescriptorPool(getCurrentDescriptorPool().get());
     frame.runDeletionQueue(*this);
 
     if (platformSurface) {
+        constexpr uint64_t timeout = std::numeric_limits<uint64_t>::max();
         try {
             const vk::ResultValue acquireImageResult = device->acquireNextImageKHR(
                 renderableResource.getSwapchain().get(), timeout, frame.surfaceSemaphore.get(), nullptr);
@@ -224,13 +236,6 @@ void Context::beginFrame() {
     } else {
         renderableResource.setAcquiredImageIndex(frameResourceIndex);
     }
-
-    frame.primaryCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
-    frame.primaryCommandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
-
-    frame.uploadCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
-    frame.uploadCommandBuffer->begin(
-        vk::CommandBufferBeginInfo{}.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
     backend.getThreadPool().runRenderJobs();
 }

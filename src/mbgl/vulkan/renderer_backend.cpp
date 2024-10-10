@@ -213,46 +213,42 @@ void RendererBackend::endFrameCapture() {
 
 #ifdef ENABLE_VULKAN_VALIDATION
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL vkDebugUtilsCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                                                           VkDebugUtilsMessageTypeFlagsEXT,
-                                                           const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
-                                                           void*) {
-    EventSeverity mbglSeverity = EventSeverity::Debug;
-
-    switch (messageSeverity) {
+namespace {
+EventSeverity getSeverity(VkDebugUtilsMessageSeverityFlagBitsEXT flag) {
+    switch (flag) {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-            mbglSeverity = EventSeverity::Debug;
-            break;
-
+            return EventSeverity::Debug;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-            mbglSeverity = EventSeverity::Info;
-            break;
-
+            return EventSeverity::Info;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-            mbglSeverity = EventSeverity::Warning;
-            break;
-
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-            mbglSeverity = EventSeverity::Error;
-            break;
-
+            return EventSeverity::Warning;
         default:
-            return VK_FALSE;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+            return EventSeverity::Error;
+    }
+}
+VKAPI_ATTR VkBool32 VKAPI_CALL vkDebugUtilsCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                                    VkDebugUtilsMessageTypeFlagsEXT,
+                                                    const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
+                                                    void*) {
+    // ignore "VUID-VkImageViewCreateInfo-imageViewFormatSwizzle-04465"
+    if (callbackData && callbackData->messageIdNumber == -2102505392) {
+        return VK_FALSE;
     }
 
-    mbgl::Log::Record(mbglSeverity, mbgl::Event::Render, callbackData->pMessage);
+    mbgl::Log::Record(getSeverity(messageSeverity), mbgl::Event::Render, callbackData->pMessage);
 
     return VK_FALSE;
 }
 
-static VKAPI_ATTR VkBool32 vkDebugReportCallback(VkDebugReportFlagsEXT flags,
-                                                 VkDebugReportObjectTypeEXT objectType,
-                                                 [[maybe_unused]] uint64_t object,
-                                                 [[maybe_unused]] size_t location,
-                                                 int32_t messageCode,
-                                                 const char* pLayerPrefix,
-                                                 const char* pMessage,
-                                                 [[maybe_unused]] void* pUserData) {
+VKAPI_ATTR VkBool32 vkDebugReportCallback(VkDebugReportFlagsEXT flags,
+                                          VkDebugReportObjectTypeEXT objectType,
+                                          [[maybe_unused]] uint64_t object,
+                                          [[maybe_unused]] size_t location,
+                                          int32_t messageCode,
+                                          const char* pLayerPrefix,
+                                          const char* pMessage,
+                                          [[maybe_unused]] void* pUserData) {
     EventSeverity mbglSeverity = EventSeverity::Debug;
 
     if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT) {
@@ -274,7 +270,7 @@ static VKAPI_ATTR VkBool32 vkDebugReportCallback(VkDebugReportFlagsEXT flags,
 
     return VK_FALSE;
 }
-
+} // namespace
 #endif
 
 void RendererBackend::initDebug() {
