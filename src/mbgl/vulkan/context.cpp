@@ -73,7 +73,7 @@ void Context::initFrameResources() {
     auto primaryCommandBuffers = backend.getDevice()->allocateCommandBuffersUnique(
         {backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, frameCount});
     auto uploadCommandBuffers = backend.getDevice()->allocateCommandBuffersUnique(
-        {backend.getCommandPool().get(), vk::CommandBufferLevel::eSecondary, frameCount});
+        {backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, frameCount});
 
     // descriptor pool info
     const std::vector<vk::DescriptorPoolSize> poolSizes = {
@@ -97,6 +97,7 @@ void Context::initFrameResources() {
         const auto& frame = frameResources.back();
 
         backend.setDebugName(frame.primaryCommandBuffer.get(), "FrameCommandBuffer_" + std::to_string(index));
+        backend.setDebugName(frame.uploadCommandBuffer.get(), "FrameUploadCommandBuffer_" + std::to_string(index));
         backend.setDebugName(frame.descriptorPool.get(), "DescriptorPool_" + std::to_string(index));
         backend.setDebugName(frame.frameSemaphore.get(), "FrameSemaphore_" + std::to_string(index));
         backend.setDebugName(frame.surfaceSemaphore.get(), "SurfaceSemaphore_" + std::to_string(index));
@@ -228,20 +229,8 @@ void Context::beginFrame() {
     frame.primaryCommandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
     frame.uploadCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
-
-    auto inheritInfo = vk::CommandBufferInheritanceInfo{}
-                           .setRenderPass(renderableResource.getRenderPass().get())
-                           .setFramebuffer(renderableResource.getFramebuffer().get());
-    frame.uploadCommandBuffer->begin(vk::CommandBufferBeginInfo{}
-                                         .setFlags(vk::CommandBufferUsageFlagBits::eRenderPassContinue)
-                                         .setPInheritanceInfo(&inheritInfo));
-
-    for (auto& buffer : frame.secondaryCommandBuffers) {
-        if (buffer) {
-            buffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
-            buffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eRenderPassContinue));
-        }
-    }
+    frame.uploadCommandBuffer->begin(
+        vk::CommandBufferBeginInfo{}.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
     backend.getThreadPool().runRenderJobs();
 }
@@ -257,6 +246,7 @@ void Context::submitFrame() {
     const auto& platformSurface = renderableResource.getPlatformSurface();
     const auto& frame = frameResources[frameResourceIndex];
 
+    frame.uploadCommandBuffer->end();
     frame.primaryCommandBuffer->end();
 
     const vk::Result resetFenceResult = device->resetFences(1, &frame.flightFrameFence.get());
@@ -266,9 +256,10 @@ void Context::submitFrame() {
 
     if (platformSurface) {
         // submit frame commands
+        const vk::CommandBuffer buffers[] = {frame.uploadCommandBuffer.get(), frame.primaryCommandBuffer.get()};
         const vk::PipelineStageFlags waitStageMask[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
         auto submitInfo = vk::SubmitInfo()
-                              .setCommandBuffers(frame.primaryCommandBuffer.get())
+                              .setCommandBuffers(buffers)
                               .setSignalSemaphores(frame.frameSemaphore.get())
                               .setWaitSemaphores(frame.surfaceSemaphore.get())
                               .setWaitDstStageMask(waitStageMask);
@@ -305,30 +296,28 @@ std::unique_ptr<gfx::CommandEncoder> Context::createCommandEncoder() {
 const vk::UniqueCommandBuffer& Context::getSecondaryCommandBuffer(std::int32_t layerIndex) {
     auto& frame = frameResources[frameResourceIndex];
     frame.secondaryCommandBuffers.resize(std::max<std::size_t>(frame.secondaryCommandBuffers.size(), layerIndex + 1));
+    frame.secondaryCommandBufferBegin.resize(frame.secondaryCommandBuffers.size());
 
+    // Create the secondary buffer for the requested layer, if it doesn't already exist
     vk::UniqueCommandBuffer& buffer = frame.secondaryCommandBuffers[layerIndex];
     if (!buffer) {
         auto& pool = backend.getCommandPool();
         const vk::CommandBufferAllocateInfo allocateInfo(pool.get(), vk::CommandBufferLevel::eSecondary, 1);
         buffer = std::move(backend.getDevice()->allocateCommandBuffersUnique(allocateInfo).front());
-
         backend.setDebugName(
             buffer.get(),
             "FrameCommandBuffer_" + util::toString(frameResourceIndex) + "_" + util::toString(layerIndex));
+    }
 
-        auto& renderableResource = backend.getDefaultRenderable().getResource<SurfaceRenderableResource>();
-        auto inheritInfo = vk::CommandBufferInheritanceInfo{}
-                               .setRenderPass(renderableResource.getRenderPass().get())
-                               .setFramebuffer(renderableResource.getFramebuffer().get())
-                               .setSubpass(0)
-                               .setPNext(nullptr)
-                               .setQueryFlags(vk::QueryControlFlags{})
-                               .setPipelineStatistics(vk::QueryPipelineStatisticFlags{})
-                               .setOcclusionQueryEnable(false);
-        auto beginInfo = vk::CommandBufferBeginInfo{}
-                             .setFlags(vk::CommandBufferUsageFlagBits::eRenderPassContinue)
-                             .setPInheritanceInfo(&inheritInfo);
-        buffer->begin(beginInfo);
+    // Begin the secondary buffer, if we haven't already done so this frame
+    if (!frame.secondaryCommandBufferBegin[layerIndex]) {
+        const auto& renderableResource = backend.getDefaultRenderable().getResource<SurfaceRenderableResource>();
+        const auto& renderPass = renderableResource.getRenderPass();
+        const auto& frameBuffer = renderableResource.getFramebuffer();
+        const auto inheritInfo = vk::CommandBufferInheritanceInfo{renderPass.get(), 0, frameBuffer.get()};
+        buffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+        buffer->begin(vk::CommandBufferBeginInfo{vk::CommandBufferUsageFlagBits::eRenderPassContinue, &inheritInfo});
+        frame.secondaryCommandBufferBegin[layerIndex] = true;
     }
     return buffer;
 }
@@ -336,16 +325,14 @@ const vk::UniqueCommandBuffer& Context::getSecondaryCommandBuffer(std::int32_t l
 void Context::endEncoding() {
     auto& frame = frameResources[frameResourceIndex];
 
-    frame.uploadCommandBuffer->end();
-    frame.primaryCommandBuffer->executeCommands(frame.uploadCommandBuffer.get());
-
     // Encode each secondary buffer into the primary
-    for (auto& buffer : frame.secondaryCommandBuffers) {
-        if (buffer) {
+    for (std::size_t i = 0; i < frame.secondaryCommandBuffers.size(); ++i) {
+        if (auto& buffer = frame.secondaryCommandBuffers[i]; buffer && frame.secondaryCommandBufferBegin[i]) {
             buffer->end();
             frame.primaryCommandBuffer->executeCommands(buffer.get());
         }
     }
+    std::fill(frame.secondaryCommandBufferBegin.begin(), frame.secondaryCommandBufferBegin.end(), false);
 
     frame.primaryCommandBuffer->endRenderPass();
 }

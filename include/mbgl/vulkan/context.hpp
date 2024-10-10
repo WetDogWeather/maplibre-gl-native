@@ -164,6 +164,7 @@ private:
         vk::UniqueCommandBuffer primaryCommandBuffer;
         vk::UniqueCommandBuffer uploadCommandBuffer;
         std::vector<vk::UniqueCommandBuffer> secondaryCommandBuffers;
+        std::vector<bool> secondaryCommandBufferBegin;
         vk::UniqueDescriptorPool descriptorPool;
 
         vk::UniqueSemaphore surfaceSemaphore;
