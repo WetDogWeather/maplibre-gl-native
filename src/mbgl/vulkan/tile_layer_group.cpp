@@ -35,11 +35,11 @@ void TileLayerGroup::upload(gfx::UploadPass& uploadPass) {
 }
 
 void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
-    if (!enabled || !getDrawableCount() || !parameters.renderPass) {
+    if (!enabled || !getDrawableCount() || !parameters.getRenderPass()) {
         return;
     }
 
-    auto& renderPass = static_cast<RenderPass&>(*parameters.renderPass);
+    auto& renderPass = static_cast<RenderPass&>(*parameters.getRenderPass());
 
     // `stencilModeFor3D` uses a different stencil mask value each time its called, so if the
     // drawables in this layer use 3D stencil mode, we need to set it up here so that all the
@@ -64,7 +64,7 @@ void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
     }
 
 #if !defined(NDEBUG)
-    const auto debugGroupRender = parameters.encoder->createDebugGroup(getLayerIndex(), getName() + "-render");
+    const auto debugGroupRender = parameters.getEncoder()->createDebugGroup(getLayerIndex(), getName() + "-render");
 #endif
 
     // If we're doing 3D stenciling and have any features to draw, set up the single-value stencil mask.

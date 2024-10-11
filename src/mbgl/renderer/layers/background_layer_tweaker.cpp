@@ -29,7 +29,7 @@ void BackgroundLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintPara
 
 #if defined(DEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(label.c_str());
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(label.c_str());
 #endif
 
     const auto& evaluated = static_cast<const BackgroundLayerProperties&>(*evaluatedProperties).evaluated;

@@ -7,9 +7,10 @@
 #include <mbgl/util/logging.hpp>
 
 #include <functional>
+#include <latch>
 #include <memory>
-#include <string>
 #include <set>
+#include <string>
 #include <vector>
 
 namespace mbgl {

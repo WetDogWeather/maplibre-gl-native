@@ -122,6 +122,20 @@ public:
         }
     }
 
+    template <typename Func /* void(LayerGroupBase&) */>
+    void visitLayerGroups(Scheduler& scheduler, Func f) {
+        std::latch latch(layerGroupsByLayerIndex.size());
+        for (auto& [index, group] : layerGroupsByLayerIndex) {
+            scheduler.schedule([&] {
+                if (group) {
+                    f(*group);
+                }
+                latch.count_down();
+            });
+        }
+        latch.wait();
+    }
+
     void updateLayers(gfx::ShaderRegistry&,
                       gfx::Context&,
                       const TransformState&,

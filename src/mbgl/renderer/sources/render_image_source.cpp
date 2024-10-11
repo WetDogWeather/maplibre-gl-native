@@ -49,7 +49,7 @@ void ImageSourceRenderData::render(PaintParameters& parameters) const {
 
     for (auto matrix : matrices) {
         programInstance->draw(parameters.context,
-                              *parameters.renderPass,
+                              *parameters.getRenderPass(),
                               gfx::LineStrip{4.0f * parameters.pixelRatio},
                               gfx::DepthMode::disabled(),
                               gfx::StencilMode::disabled(),

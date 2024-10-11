@@ -239,7 +239,7 @@ void Drawable::draw(PaintParameters& parameters) const {
     }
 
     auto& context = static_cast<Context&>(parameters.context);
-    auto& renderPass_ = static_cast<RenderPass&>(*parameters.renderPass);
+    auto& renderPass_ = static_cast<RenderPass&>(*parameters.getRenderPass());
     auto& encoder = renderPass_.getEncoder();
     auto& commandBuffer = encoder.getSecondaryCommandBuffer(getLayerIndex());
 

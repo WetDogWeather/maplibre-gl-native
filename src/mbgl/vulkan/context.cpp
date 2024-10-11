@@ -70,10 +70,13 @@ void Context::initFrameResources() {
     const auto& device = backend.getDevice();
     const auto frameCount = backend.getMaxFrames();
 
-    auto primaryCommandBuffers = backend.getDevice()->allocateCommandBuffersUnique(
-        {backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, frameCount});
-    auto uploadCommandBuffers = backend.getDevice()->allocateCommandBuffersUnique(
-        {backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, frameCount});
+    auto [primaryCommandBuffers, uploadCommandBuffers] = [&] {
+        // std::unique_lock lock{commandPoolMutex};
+        return std::make_pair(backend.getDevice()->allocateCommandBuffersUnique(
+                                  {backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, frameCount}),
+                              backend.getDevice()->allocateCommandBuffersUnique(
+                                  {backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, frameCount}));
+    }();
 
     // descriptor pool info
     const std::vector<vk::DescriptorPoolSize> poolSizes = {
@@ -133,11 +136,13 @@ void Context::enqueueDeletion(std::function<void(const Context&)>&& function) {
 }
 
 void Context::submitOneTimeCommand(const std::function<void(const vk::UniqueCommandBuffer&)>& function) {
-    const vk::CommandBufferAllocateInfo allocateInfo(
-        backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, 1);
-
     const auto& device = backend.getDevice();
-    const auto& commandBuffers = device->allocateCommandBuffersUnique(allocateInfo);
+    const auto& commandBuffers = [&] {
+        // std::unique_lock lock{commandPoolMutex};
+        const vk::CommandBufferAllocateInfo allocateInfo(
+            backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, 1);
+        return device->allocateCommandBuffersUnique(allocateInfo);
+    }();
     auto& commandBuffer = commandBuffers.front();
 
     backend.setDebugName(commandBuffer.get(), "OneTimeSubmitCommandBuffer");
@@ -194,15 +199,19 @@ void Context::beginFrame() {
 
     waitFrame();
 
-    frame.primaryCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
-    frame.primaryCommandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+    {
+        // std::unique_lock deviceLock{commandPoolMutex};
 
-    frame.uploadCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
-    frame.uploadCommandBuffer->begin(vk::CommandBufferBeginInfo{vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+        frame.primaryCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+        frame.primaryCommandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
-    for (auto& buffer : frame.secondaryCommandBuffers) {
-        if (buffer) {
-            buffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+        frame.uploadCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+        frame.uploadCommandBuffer->begin(vk::CommandBufferBeginInfo{vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+
+        for (auto& [index, buffer] : frame.secondaryCommandBuffers) {
+            if (buffer) {
+                buffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+            }
         }
     }
 
@@ -300,13 +309,18 @@ std::unique_ptr<gfx::CommandEncoder> Context::createCommandEncoder() {
 
 const vk::UniqueCommandBuffer& Context::getSecondaryCommandBuffer(std::int32_t layerIndex) {
     auto& frame = frameResources[frameResourceIndex];
-    frame.secondaryCommandBuffers.resize(std::max<std::size_t>(frame.secondaryCommandBuffers.size(), layerIndex + 1));
-    frame.secondaryCommandBufferBegin.resize(frame.secondaryCommandBuffers.size());
+
+    std::unique_lock lock(frame.secondaryCommandBufferMutex);
+
+    frame.secondaryCommandBufferBegin.resize(
+        std::max<std::size_t>(frame.secondaryCommandBufferBegin.size(), layerIndex + 1));
 
     // Create the secondary buffer for the requested layer, if it doesn't already exist
-    vk::UniqueCommandBuffer& buffer = frame.secondaryCommandBuffers[layerIndex];
+    auto& buffer = frame.secondaryCommandBuffers[layerIndex];
     if (!buffer) {
-        auto& pool = backend.getCommandPool();
+        // std::unique_lock deviceLock{commandPoolMutex};
+
+        auto& pool = backend.getCommandPool(layerIndex);
         const vk::CommandBufferAllocateInfo allocateInfo(pool.get(), vk::CommandBufferLevel::eSecondary, 1);
         buffer = std::move(backend.getDevice()->allocateCommandBuffersUnique(allocateInfo).front());
         backend.setDebugName(
@@ -316,6 +330,8 @@ const vk::UniqueCommandBuffer& Context::getSecondaryCommandBuffer(std::int32_t l
 
     // Begin the secondary buffer, if we haven't already done so this frame
     if (!frame.secondaryCommandBufferBegin[layerIndex]) {
+        // std::unique_lock deviceLock{commandPoolMutex};
+
         const auto& renderableResource = backend.getDefaultRenderable().getResource<SurfaceRenderableResource>();
         const auto& renderPass = renderableResource.getRenderPass();
         const auto& frameBuffer = renderableResource.getFramebuffer();
@@ -331,8 +347,8 @@ void Context::endEncoding() {
     auto& frame = frameResources[frameResourceIndex];
 
     // Encode each secondary buffer into the primary
-    for (std::size_t i = 0; i < frame.secondaryCommandBuffers.size(); ++i) {
-        if (auto& buffer = frame.secondaryCommandBuffers[i]; buffer && frame.secondaryCommandBufferBegin[i]) {
+    for (auto& [index, buffer] : frame.secondaryCommandBuffers) {
+        if (buffer && frame.secondaryCommandBufferBegin[index]) {
             buffer->end();
             frame.primaryCommandBuffer->executeCommands(buffer.get());
         }

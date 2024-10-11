@@ -59,12 +59,15 @@ public:
                     LineAtlas&,
                     PatternAtlas&,
                     uint64_t frameCount);
-    ~PaintParameters();
+
+    // N.B.: Copies can be made, but they cannot outlive the original instance
+    // This is for use only when encoding in parallel, where each thread needs a separate copy
+    explicit PaintParameters(PaintParameters&);
+
+    ~PaintParameters() = default;
 
     gfx::Context& context;
     gfx::RendererBackend& backend;
-    std::unique_ptr<gfx::CommandEncoder> encoder;
-    std::unique_ptr<gfx::RenderPass> renderPass;
 
     const TransformParameters& transformParams;
     const TransformState& state;
@@ -87,6 +90,12 @@ public:
     // We're migrating to a dynamic one
     gfx::ShaderRegistry& shaders;
 
+    const std::unique_ptr<gfx::CommandEncoder>& getEncoder() const;
+    void setEncoder(std::unique_ptr<gfx::CommandEncoder>&&);
+
+    const std::unique_ptr<gfx::RenderPass>& getRenderPass() const;
+    void setRenderPass(std::unique_ptr<gfx::RenderPass>&&);
+
     gfx::DepthMode depthModeForSublayer(uint8_t n, gfx::DepthMaskType) const;
     gfx::DepthMode depthModeFor3D() const;
     gfx::ColorMode colorModeForRenderPass() const;
@@ -94,7 +103,6 @@ public:
     mat4 matrixForTile(const UnwrappedTileID&, bool aligned = false) const;
 
     // Stencil handling
-public:
     void renderTileClippingMasks(std::int32_t layerIndex, const RenderTiles&);
 
     /// Clear the stencil buffer, even if there are no tile masks (for 3D)
@@ -120,11 +128,16 @@ private:
     std::map<UnwrappedTileID, int32_t> tileClippingMaskIDs;
     int32_t nextStencilID = 1;
 
+    std::unique_ptr<gfx::CommandEncoder> encoder;
+    std::unique_ptr<gfx::RenderPass> renderPass;
+
+    std::optional<std::reference_wrapper<PaintParameters>> baseParameters;
+
 public:
-    uint32_t currentLayer;
-    float depthRangeSize;
+    uint32_t currentLayer = 0;
+    float depthRangeSize = 0.0f;
     uint32_t opaquePassCutoff = 0;
-    float symbolFadeChange;
+    float symbolFadeChange = 0.0f;
     const uint64_t frameCount;
 
     static constexpr int numSublayers = 3;

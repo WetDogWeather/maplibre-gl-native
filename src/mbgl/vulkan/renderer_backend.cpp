@@ -565,15 +565,18 @@ void RendererBackend::initSwapchain() {
 }
 
 void RendererBackend::initCommandPool() {
-    const vk::CommandPoolCreateInfo createInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, graphicsQueueIndex);
-    commandPool = device->createCommandPoolUnique(createInfo);
+    getCommandPool({});
 }
 
 void RendererBackend::destroyResources() {
     if (device) device->waitIdle();
 
     context.reset();
-    commandPool.reset();
+
+    {
+        std::unique_lock lock(commandPoolMutex);
+        commandPoolByLayer.clear();
+    }
 
     vmaDestroyAllocator(allocator);
 
@@ -641,6 +644,23 @@ void RendererBackend::initShaders(gfx::ShaderRegistry& shaders, const ProgramPar
                   shaders::BuiltIn::SymbolSDFIconShader,
                   shaders::BuiltIn::SymbolTextAndIconShader,
                   shaders::BuiltIn::WideVectorShader>(shaders, programParameters);
+}
+
+const vk::UniqueCommandPool& RendererBackend::getCommandPool(std::optional<std::int32_t> layerIndex) {
+    {
+        std::shared_lock lock(commandPoolMutex);
+        if (const auto hit = commandPoolByLayer.find(layerIndex); hit != commandPoolByLayer.end()) {
+            return hit->second;
+        }
+    }
+    std::unique_lock lock(commandPoolMutex);
+    const auto result = commandPoolByLayer.insert(std::make_pair(layerIndex, vk::UniqueCommandPool{}));
+    if (result.second) {
+        // new item inserted
+        result.first->second = device->createCommandPoolUnique(
+            {vk::CommandPoolCreateFlagBits::eResetCommandBuffer, static_cast<uint32_t>(graphicsQueueIndex)});
+    }
+    return result.first->second;
 }
 
 } // namespace vulkan

@@ -32,7 +32,7 @@ void CircleLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParamete
 
 #if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(layerGroup.getLayerIndex(), label.c_str());
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(layerGroup.getLayerIndex(), label.c_str());
 #endif
 
     const auto zoom = static_cast<float>(parameters.state.getZoom());

@@ -195,7 +195,7 @@ void RenderTile::finishRender(PaintParameters& parameters) const {
             *debugBucket->vertexBuffer, paintAttributeData, properties);
 
         program->draw(parameters.context,
-                      *parameters.renderPass,
+                      *parameters.getRenderPass(),
                       gfx::Lines{4.0f * parameters.pixelRatio},
                       gfx::DepthMode::disabled(),
                       gfx::StencilMode::disabled(),
@@ -215,7 +215,7 @@ void RenderTile::finishRender(PaintParameters& parameters) const {
                       "text-outline");
 
         program->draw(parameters.context,
-                      *parameters.renderPass,
+                      *parameters.getRenderPass(),
                       gfx::Lines{2.0f * parameters.pixelRatio},
                       gfx::DepthMode::disabled(),
                       gfx::StencilMode::disabled(),
@@ -241,7 +241,7 @@ void RenderTile::finishRender(PaintParameters& parameters) const {
             debugBucket->tileBorderSegments = RenderStaticData::tileBorderSegments();
         }
         program->draw(parameters.context,
-                      *parameters.renderPass,
+                      *parameters.getRenderPass(),
                       gfx::LineStrip{4.0f * parameters.pixelRatio},
                       gfx::DepthMode::disabled(),
                       gfx::StencilMode::disabled(),

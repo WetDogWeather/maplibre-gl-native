@@ -109,7 +109,7 @@ void RenderBackgroundLayer::render(PaintParameters& parameters) {
 
         program.draw(
             parameters.context,
-            *parameters.renderPass,
+            *parameters.getRenderPass(),
             gfx::Triangles(),
             parameters.depthModeForSublayer(
                 0,

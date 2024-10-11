@@ -163,8 +163,12 @@ private:
     struct FrameResources {
         vk::UniqueCommandBuffer primaryCommandBuffer;
         vk::UniqueCommandBuffer uploadCommandBuffer;
-        std::vector<vk::UniqueCommandBuffer> secondaryCommandBuffers;
+
+        // map instead of vector to provide stable value references
+        mbgl::unordered_map<int32_t, vk::UniqueCommandBuffer> secondaryCommandBuffers;
         std::vector<bool> secondaryCommandBufferBegin;
+        std::mutex secondaryCommandBufferMutex;
+
         vk::UniqueDescriptorPool descriptorPool;
 
         vk::UniqueSemaphore surfaceSemaphore;
@@ -185,6 +189,17 @@ private:
               surfaceSemaphore(std::move(surf)),
               frameSemaphore(std::move(frame)),
               flightFrameFence(std::move(flight)) {}
+        FrameResources(FrameResources&& other)
+            : primaryCommandBuffer(std::move(other.primaryCommandBuffer)),
+              uploadCommandBuffer(std::move(other.uploadCommandBuffer)),
+              secondaryCommandBuffers(std::move(other.secondaryCommandBuffers)),
+              secondaryCommandBufferBegin(std::move(other.secondaryCommandBufferBegin)),
+              // not secondaryCommandBufferMutex
+              descriptorPool(std::move(other.descriptorPool)),
+              surfaceSemaphore(std::move(other.surfaceSemaphore)),
+              frameSemaphore(std::move(other.frameSemaphore)),
+              flightFrameFence(std::move(other.flightFrameFence)),
+              deletionQueue(std::move(other.deletionQueue)) {}
 
         void runDeletionQueue(const Context&);
     };

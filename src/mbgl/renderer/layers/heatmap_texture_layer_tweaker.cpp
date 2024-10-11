@@ -24,7 +24,7 @@ void HeatmapTextureLayerTweaker::execute(LayerGroupBase& layerGroup, const Paint
 
 #if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(layerGroup.getLayerIndex(), label.c_str());
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(layerGroup.getLayerIndex(), label.c_str());
 #endif
 
     propertiesUpdated = false;

@@ -34,15 +34,15 @@ void LayerGroup::upload(gfx::UploadPass& uploadPass) {
 }
 
 void LayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
-    if (!enabled || !getDrawableCount() || !parameters.renderPass) {
+    if (!enabled || !getDrawableCount() || !parameters.getRenderPass()) {
         return;
     }
 
 #if !defined(NDEBUG)
-    const auto debugGroup = parameters.encoder->createDebugGroup(getLayerIndex(), getName() + "-render");
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(getLayerIndex(), getName() + "-render");
 #endif
 
-    auto& renderPass = static_cast<RenderPass&>(*parameters.renderPass);
+    auto& renderPass = static_cast<RenderPass&>(*parameters.getRenderPass());
 
     bool bindUBOs = false;
     visitDrawables([&](gfx::Drawable& drawable) {

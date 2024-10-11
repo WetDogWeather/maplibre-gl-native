@@ -117,8 +117,8 @@ void RenderHeatmapLayer::render(PaintParameters& parameters) {
             renderTexture = parameters.context.createOffscreenTexture(size, gfx::TextureChannelDataType::HalfFloat);
         }
 
-        auto renderPass = parameters.encoder->createRenderPass("heatmap texture",
-                                                               {*renderTexture, Color{0.0f, 0.0f, 0.0f, 1.0f}, {}, {}});
+        auto renderPass = parameters.getEncoder()->createRenderPass(
+            "heatmap texture", {*renderTexture, Color{0.0f, 0.0f, 0.0f, 1.0f}, {}, {}});
 
         for (const RenderTile& tile : *renderTiles) {
             const LayerRenderData* renderData = getRenderDataForPass(tile, parameters.pass);
@@ -189,7 +189,7 @@ void RenderHeatmapLayer::render(PaintParameters& parameters) {
         }
         heatmapTextureProgram->draw(
             parameters.context,
-            *parameters.renderPass,
+            *parameters.getRenderPass(),
             gfx::Triangles(),
             gfx::DepthMode::disabled(),
             gfx::StencilMode::disabled(),

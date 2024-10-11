@@ -54,7 +54,6 @@ PaintParameters::PaintParameters(gfx::Context& context_,
                                  uint64_t frameCount_)
     : context(context_),
       backend(backend_),
-      encoder(context.createCommandEncoder()),
       transformParams(transformParams_),
       state(transformParams_.state),
       evaluatedLight(evaluatedLight_),
@@ -71,6 +70,7 @@ PaintParameters::PaintParameters(gfx::Context& context_,
       programs(staticData_.programs),
 #endif
       shaders(*staticData_.shaders),
+      encoder(context.createCommandEncoder()),
       frameCount(frameCount_) {
     pixelsToGLUnits = {{2.0f / state.getSize().width, -2.0f / state.getSize().height}};
 
@@ -79,7 +79,41 @@ PaintParameters::PaintParameters(gfx::Context& context_,
     }
 }
 
-PaintParameters::~PaintParameters() = default;
+PaintParameters::PaintParameters(PaintParameters& other)
+    : PaintParameters(other.context,
+                      other.pixelRatio,
+                      other.backend,
+                      other.evaluatedLight,
+                      other.mapMode,
+                      other.debugOptions,
+                      other.timePoint,
+                      other.transformParams,
+                      other.staticData,
+                      other.lineAtlas,
+                      other.patternAtlas,
+                      other.frameCount) {
+    pass = other.pass;
+    depthRangeSize = other.depthRangeSize;
+    symbolFadeChange = other.symbolFadeChange;
+    encoder.reset(); // TODO: avoid creating in the first place... or use a different instance for each thread?
+    baseParameters = other.baseParameters ? other.baseParameters->get() : other;
+}
+
+const std::unique_ptr<gfx::CommandEncoder>& PaintParameters::getEncoder() const {
+    return baseParameters ? baseParameters->get().encoder : encoder;
+}
+
+void PaintParameters::setEncoder(std::unique_ptr<gfx::CommandEncoder>&& enc) {
+    (baseParameters ? baseParameters->get() : *this).encoder = std::move(enc);
+}
+
+const std::unique_ptr<gfx::RenderPass>& PaintParameters::getRenderPass() const {
+    return baseParameters ? baseParameters->get().renderPass : renderPass;
+}
+
+void PaintParameters::setRenderPass(std::unique_ptr<gfx::RenderPass>&& rp) {
+    (baseParameters ? baseParameters->get() : *this).renderPass = std::move(rp);
+}
 
 mat4 PaintParameters::matrixForTile(const UnwrappedTileID& tileID, bool aligned) const {
     mat4 matrix;
