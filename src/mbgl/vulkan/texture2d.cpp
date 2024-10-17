@@ -48,6 +48,7 @@ Texture2D::~Texture2D() {
 }
 
 gfx::Texture2D& Texture2D::setSamplerConfiguration(const SamplerState& samplerState_) noexcept {
+    std::lock_guard lock{samplerMutex};
     samplerState = samplerState_;
     samplerStateDirty = true;
     return *this;
@@ -458,6 +459,8 @@ void Texture2D::transitionToGeneralLayout(const vk::UniqueCommandBuffer& buffer)
 }
 
 const vk::Sampler& Texture2D::getVulkanSampler() {
+    std::lock_guard lock{samplerMutex};
+
     if (samplerStateDirty) {
         createSampler();
     }

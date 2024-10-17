@@ -64,7 +64,7 @@ public:
     static constexpr std::string_view Name{"GenericVulkanShader"};
     const std::string_view typeName() const noexcept override { return Name; }
 
-    const vk::UniquePipeline& getPipeline(const PipelineInfo& pipelineInfo);
+    const vk::UniquePipeline& getPipeline(const PipelineInfo& pipelineInfo, std::int32_t layerIndex);
 
     std::optional<size_t> getSamplerLocation(const size_t id) const override { return textureBindings[id]; }
     const gfx::VertexAttributeArray& getVertexAttributes() const override { return vertexAttributes; }
@@ -85,7 +85,14 @@ protected:
 
     vk::UniqueShaderModule vertexShader;
     vk::UniqueShaderModule fragmentShader;
-    std::unordered_map<std::size_t, vk::UniquePipeline> pipelines;
+
+    struct Hash {
+        std::size_t operator()(const std::pair<std::size_t, std::int32_t>& k) const {
+            return util::hash(k.first, k.second);
+        }
+    };
+    mbgl::unordered_map<std::pair<std::size_t, std::int32_t>, vk::UniquePipeline, Hash> pipelines;
+    std::mutex pipelineMutex;
 
     UniformBlockArray uniformBlocks;
     VertexAttributeArray vertexAttributes;

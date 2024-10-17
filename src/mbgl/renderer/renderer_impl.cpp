@@ -212,6 +212,18 @@ void Renderer::Impl::render(const RenderTree& renderTree,
     const auto& layerRenderItems = renderTree.getLayerRenderItems();
 #endif
 
+#if MLN_DRAWABLE_RENDERER
+    mbgl::unordered_map<std::thread::id, gfx::BackendScope> threadScopes;
+    std::mutex threadScopesMutex;
+    const auto initScope = [&] {
+        if (!gfx::BackendScope::exists()) {
+            std::unique_lock<std::mutex> lock(threadScopesMutex);
+            threadScopes.try_emplace(
+                std::this_thread::get_id(), parameters.backend, gfx::BackendScope::ScopeType::Implicit);
+        }
+    };
+#endif
+
     // - UPLOAD PASS -------------------------------------------------------------------------------
     // Uploads all required buffers and images before we do any actual rendering.
     {
@@ -262,7 +274,10 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         orchestrator.updateDebugLayerGroups(renderTree, parameters);
 
         // Give the layers a chance to upload
-        orchestrator.visitLayerGroups([&](LayerGroupBase& layerGroup) { layerGroup.upload(*uploadPass); });
+        orchestrator.visitLayerGroups(*Scheduler::GetBackground(), [&](LayerGroupBase& layerGroup) {
+            initScope();
+            layerGroup.upload(*uploadPass);
+        });
 
         // Give the render targets a chance to upload
         orchestrator.visitRenderTargets([&](RenderTarget& renderTarget) { renderTarget.upload(*uploadPass); });
@@ -317,9 +332,13 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
         // draw layer groups, 3D pass
         const auto maxLayerIndex = orchestrator.maxLayerIndex();
+        std::int32_t prevLayerIndex = 0;
         orchestrator.visitLayerGroups([&](LayerGroupBase& layerGroup) {
-            layerGroup.render(orchestrator, parameters);
-            parameters.currentLayer = maxLayerIndex - layerGroup.getLayerIndex();
+            initScope();
+            PaintParameters copy{parameters};
+            copy.currentLayer = maxLayerIndex - prevLayerIndex;
+            layerGroup.render(orchestrator, copy);
+            prevLayerIndex = layerGroup.getLayerIndex();
         });
     };
 #endif // MLN_DRAWABLE_RENDERER
@@ -377,6 +396,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
         // draw layer groups, opaque pass
         orchestrator.visitLayerGroups(*Scheduler::GetBackground(), [&](LayerGroupBase& layerGroup) {
+            initScope();
             PaintParameters copy{parameters};
             copy.currentLayer = layerGroup.getLayerIndex();
             layerGroup.render(orchestrator, copy);
@@ -392,6 +412,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
         // draw layer groups, translucent pass
         orchestrator.visitLayerGroups(*Scheduler::GetBackground(), [&](LayerGroupBase& layerGroup) {
+            initScope();
             PaintParameters copy{parameters};
             copy.currentLayer = maxLayerIndex - layerGroup.getLayerIndex();
             layerGroup.render(orchestrator, copy);

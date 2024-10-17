@@ -169,7 +169,7 @@ void PaintParameters::clearStencil(std::int32_t layerIndex) {
 
     // Metal doesn't have an equivalent of `glClear`, so we clear the buffer by drawing zero to (0:0,0)
 #if !defined(NDEBUG)
-    const auto debugGroup = renderPass->createDebugGroup(layerIndex, "tile-clip-mask-clear");
+    const auto debugGroup = getRenderPass()->createDebugGroup(layerIndex, "tile-clip-mask-clear");
 #endif
 
     const std::vector<shaders::ClipUBO> tileUBO = {
@@ -178,10 +178,10 @@ void PaintParameters::clearStencil(std::int32_t layerIndex) {
                          /*.pad=*/0,
                          0,
                          0}};
-    mtlContext.renderTileClippingMasks(*renderPass, staticData, tileUBO);
+    mtlContext.renderTileClippingMasks(*getRenderPass(), staticData, tileUBO);
     context.renderingStats().stencilClears++;
 #elif MLN_RENDER_BACKEND_VULKAN
-    const auto& vulkanRenderPass = static_cast<vulkan::RenderPass&>(*renderPass);
+    const auto& vulkanRenderPass = static_cast<vulkan::RenderPass&>(*getRenderPass());
     vulkanRenderPass.clearStencil(layerIndex, 0);
 
     context.renderingStats().stencilClears++;
@@ -192,7 +192,7 @@ void PaintParameters::clearStencil(std::int32_t layerIndex) {
 
 void PaintParameters::renderTileClippingMasks(std::int32_t layerIndex, const RenderTiles& renderTiles) {
     // We can avoid updating the mask if it already contains the same set of tiles.
-    if (!renderTiles || !renderPass || tileIDsCovered(renderTiles, tileClippingMaskIDs)) {
+    if (!renderTiles || !getRenderPass() || tileIDsCovered(renderTiles, tileClippingMaskIDs)) {
         return;
     }
 
@@ -234,11 +234,11 @@ void PaintParameters::renderTileClippingMasks(std::int32_t layerIndex, const Ren
 
     if (!tileUBOs.empty()) {
 #if !defined(NDEBUG)
-        const auto debugGroup = renderPass->createDebugGroup(layerIndex, "tile-clip-masks");
+        const auto debugGroup = getRenderPass()->createDebugGroup(layerIndex, "tile-clip-masks");
 #endif
 
         auto& mtlContext = static_cast<mtl::Context&>(context);
-        mtlContext.renderTileClippingMasks(*renderPass, staticData, tileUBOs);
+        mtlContext.renderTileClippingMasks(*getRenderPass(), staticData, tileUBOs);
 
         mtlContext.renderingStats().stencilUpdates++;
     }
@@ -268,11 +268,11 @@ void PaintParameters::renderTileClippingMasks(std::int32_t layerIndex, const Ren
 
     if (!tileUBOs.empty()) {
 #if !defined(NDEBUG)
-        const auto debugGroup = renderPass->createDebugGroup(layerIndex, "tile-clip-masks");
+        const auto debugGroup = getRenderPass()->createDebugGroup(layerIndex, "tile-clip-masks");
 #endif
 
         auto& vulkanContext = static_cast<vulkan::Context&>(context);
-        vulkanContext.renderTileClippingMasks(layerIndex, *renderPass, staticData, tileUBOs);
+        vulkanContext.renderTileClippingMasks(layerIndex, *getRenderPass(), staticData, tileUBOs);
         vulkanContext.renderingStats().stencilUpdates++;
     }
 
@@ -302,7 +302,7 @@ void PaintParameters::renderTileClippingMasks(std::int32_t layerIndex, const Ren
         }
 
         program->draw(context,
-                      *renderPass,
+                      *getRenderPass(),
                       gfx::Triangles(),
                       gfx::DepthMode::disabled(),
                       gfx::StencilMode{gfx::StencilMode::Always{},

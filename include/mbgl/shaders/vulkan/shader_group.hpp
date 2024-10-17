@@ -55,6 +55,8 @@ public:
         mbgl::util::hash_combine(seed, programParameters.getDefinesHash());
         const std::string shaderName = getShaderName(name, seed);
 
+        std::lock_guard lock{mutex};
+
         auto shader = get<vulkan::ShaderProgram>(shaderName);
         if (!shader) {
             DefinesMap additionalDefines;
@@ -86,6 +88,9 @@ public:
         }
         return shader;
     }
+
+private:
+    std::mutex mutex;
 };
 
 } // namespace vulkan

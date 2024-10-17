@@ -111,8 +111,10 @@ ShaderProgram::ShaderProgram(shaders::BuiltIn shaderID,
 
 ShaderProgram::~ShaderProgram() noexcept = default;
 
-const vk::UniquePipeline& ShaderProgram::getPipeline(const PipelineInfo& pipelineInfo) {
-    auto& pipeline = pipelines[pipelineInfo.hash()];
+const vk::UniquePipeline& ShaderProgram::getPipeline(const PipelineInfo& pipelineInfo, std::int32_t layerIndex) {
+    std::unique_lock lock{pipelineMutex};
+
+    auto& pipeline = pipelines[std::make_pair(pipelineInfo.hash(), layerIndex)];
     if (pipeline) return pipeline;
 
     const auto vertexInputState = vk::PipelineVertexInputStateCreateInfo()

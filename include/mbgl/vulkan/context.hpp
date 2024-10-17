@@ -143,7 +143,7 @@ public:
     const vk::UniquePipelineLayout& getPushConstantPipelineLayout();
 
     uint8_t getCurrentFrameResourceIndex() const { return frameResourceIndex; }
-    const vk::UniqueDescriptorPool& getCurrentDescriptorPool() const;
+    const vk::UniqueDescriptorPool& getDescriptorPool(std::int32_t layerIndex);
     void enqueueDeletion(std::function<void(const Context&)>&& function);
     void submitOneTimeCommand(const std::function<void(const vk::UniqueCommandBuffer&)>& function);
 
@@ -169,7 +169,8 @@ private:
         std::vector<bool> secondaryCommandBufferBegin;
         std::mutex secondaryCommandBufferMutex;
 
-        vk::UniqueDescriptorPool descriptorPool;
+        mbgl::unordered_map<int32_t, vk::UniqueDescriptorPool> descriptorPools;
+        std::mutex descriptorPoolsMutex;
 
         vk::UniqueSemaphore surfaceSemaphore;
         vk::UniqueSemaphore frameSemaphore;
@@ -179,13 +180,11 @@ private:
 
         FrameResources(vk::UniqueCommandBuffer&& pcb,
                        vk::UniqueCommandBuffer&& ucb,
-                       vk::UniqueDescriptorPool&& dp,
                        vk::UniqueSemaphore&& surf,
                        vk::UniqueSemaphore&& frame,
                        vk::UniqueFence&& flight)
             : primaryCommandBuffer(std::move(pcb)),
               uploadCommandBuffer(std::move(ucb)),
-              descriptorPool(std::move(dp)),
               surfaceSemaphore(std::move(surf)),
               frameSemaphore(std::move(frame)),
               flightFrameFence(std::move(flight)) {}
@@ -194,8 +193,7 @@ private:
               uploadCommandBuffer(std::move(other.uploadCommandBuffer)),
               secondaryCommandBuffers(std::move(other.secondaryCommandBuffers)),
               secondaryCommandBufferBegin(std::move(other.secondaryCommandBufferBegin)),
-              // not secondaryCommandBufferMutex
-              descriptorPool(std::move(other.descriptorPool)),
+              descriptorPools(std::move(other.descriptorPools)),
               surfaceSemaphore(std::move(other.surfaceSemaphore)),
               frameSemaphore(std::move(other.frameSemaphore)),
               flightFrameFence(std::move(other.flightFrameFence)),
@@ -220,6 +218,7 @@ private:
     std::vector<vk::DescriptorSetLayout> descriptorSetLayouts;
     vk::UniquePipelineLayout generalPipelineLayout;
     vk::UniquePipelineLayout pushConstantPipelineLayout;
+    std::recursive_mutex descriptorSetMutex;
 
     uint8_t frameResourceIndex = 0;
     std::vector<FrameResources> frameResources;
@@ -233,6 +232,7 @@ private:
 
         PipelineInfo pipelineInfo;
     } clipping;
+    std::recursive_mutex clippingMutex;
 };
 
 } // namespace vulkan

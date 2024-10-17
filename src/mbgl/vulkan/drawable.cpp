@@ -283,7 +283,7 @@ void Drawable::draw(PaintParameters& parameters) const {
 
         impl->pipelineInfo.setDynamicValues(context.getBackend(), commandBuffer);
 
-        const auto& pipeline = shaderImpl.getPipeline(impl->pipelineInfo);
+        const auto& pipeline = shaderImpl.getPipeline(impl->pipelineInfo, layerIndex);
         commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.get());
 
         if (segment.indexLength) {
@@ -411,7 +411,7 @@ bool Drawable::bindDescriptors(CommandEncoder& encoder) const noexcept {
 
     auto& context = encoder.getContext();
     const auto& device = context.getBackend().getDevice();
-    const auto& descriptorPool = context.getCurrentDescriptorPool();
+    const auto& descriptorPool = context.getDescriptorPool(getLayerIndex());
     const auto& descriptorSetLayouts = context.getDescriptorSetLayouts();
 
     const auto descriptorAllocInfo =

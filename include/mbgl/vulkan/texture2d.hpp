@@ -115,6 +115,7 @@ private:
     vk::ImageLayout imageLayout{vk::ImageLayout::eUndefined};
 
     vk::Sampler sampler{};
+    std::mutex samplerMutex;
 
     Texture2DUsage textureUsage{Texture2DUsage::ShaderInput};
 };

@@ -71,28 +71,17 @@ void Context::initFrameResources() {
     const auto frameCount = backend.getMaxFrames();
 
     auto [primaryCommandBuffers, uploadCommandBuffers] = [&] {
-        // std::unique_lock lock{commandPoolMutex};
         return std::make_pair(backend.getDevice()->allocateCommandBuffersUnique(
                                   {backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, frameCount}),
                               backend.getDevice()->allocateCommandBuffersUnique(
                                   {backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, frameCount}));
     }();
 
-    // descriptor pool info
-    const std::vector<vk::DescriptorPoolSize> poolSizes = {
-        {vk::DescriptorType::eUniformBuffer, MLN_VULKAN_DESCRIPTOR_POOL_SIZE},
-        {vk::DescriptorType::eCombinedImageSampler, MLN_VULKAN_DESCRIPTOR_POOL_SIZE},
-    };
-
-    const auto descriptorPoolInfo = vk::DescriptorPoolCreateInfo().setPoolSizes(poolSizes).setMaxSets(
-        MLN_VULKAN_DESCRIPTOR_POOL_SIZE);
-
     frameResources.reserve(frameCount);
 
     for (uint32_t index = 0; index < frameCount; ++index) {
         frameResources.emplace_back(std::move(primaryCommandBuffers[index]),
                                     std::move(uploadCommandBuffers[index]),
-                                    device->createDescriptorPoolUnique(descriptorPoolInfo),
                                     device->createSemaphoreUnique({}),
                                     device->createSemaphoreUnique({}),
                                     device->createFenceUnique(vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled)));
@@ -101,7 +90,6 @@ void Context::initFrameResources() {
 
         backend.setDebugName(frame.primaryCommandBuffer.get(), "FrameCommandBuffer_" + std::to_string(index));
         backend.setDebugName(frame.uploadCommandBuffer.get(), "FrameUploadCommandBuffer_" + std::to_string(index));
-        backend.setDebugName(frame.descriptorPool.get(), "DescriptorPool_" + std::to_string(index));
         backend.setDebugName(frame.frameSemaphore.get(), "FrameSemaphore_" + std::to_string(index));
         backend.setDebugName(frame.surfaceSemaphore.get(), "SurfaceSemaphore_" + std::to_string(index));
         backend.setDebugName(frame.flightFrameFence.get(), "FrameFence_" + std::to_string(index));
@@ -122,8 +110,28 @@ void Context::destroyResources() {
     frameResources.clear();
 }
 
-const vk::UniqueDescriptorPool& Context::getCurrentDescriptorPool() const {
-    return frameResources[frameResourceIndex].descriptorPool;
+const vk::UniqueDescriptorPool& Context::getDescriptorPool(std::int32_t /*std::optional<std::int32_t>*/ layerIndex) {
+    const auto& device = backend.getDevice();
+    auto& frame = frameResources[frameResourceIndex];
+
+    std::lock_guard lock{frame.descriptorPoolsMutex};
+
+    auto& pool = frame.descriptorPools[layerIndex];
+    if (!pool) {
+        const std::vector<vk::DescriptorPoolSize> poolSizes = {
+            {vk::DescriptorType::eUniformBuffer, MLN_VULKAN_DESCRIPTOR_POOL_SIZE},
+            {vk::DescriptorType::eCombinedImageSampler, MLN_VULKAN_DESCRIPTOR_POOL_SIZE},
+        };
+
+        const auto descriptorPoolInfo = vk::DescriptorPoolCreateInfo().setPoolSizes(poolSizes).setMaxSets(
+            MLN_VULKAN_DESCRIPTOR_POOL_SIZE);
+
+        pool = device->createDescriptorPoolUnique(descriptorPoolInfo),
+        backend.setDebugName(pool.get(),
+                             "DescriptorPool_" + util::toString(frameResourceIndex) + "_" + util::toString(layerIndex));
+    }
+
+    return pool;
 }
 
 void Context::enqueueDeletion(std::function<void(const Context&)>&& function) {
@@ -138,7 +146,6 @@ void Context::enqueueDeletion(std::function<void(const Context&)>&& function) {
 void Context::submitOneTimeCommand(const std::function<void(const vk::UniqueCommandBuffer&)>& function) {
     const auto& device = backend.getDevice();
     const auto& commandBuffers = [&] {
-        // std::unique_lock lock{commandPoolMutex};
         const vk::CommandBufferAllocateInfo allocateInfo(
             backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, 1);
         return device->allocateCommandBuffersUnique(allocateInfo);
@@ -184,7 +191,9 @@ void Context::beginFrame() {
         // we wait for an idle device to recreate the swapchain
         // so it's a good opportunity to delete all queued items
         for (auto& frame : frameResources) {
-            device->resetDescriptorPool(frame.descriptorPool.get());
+            for (auto& [_, pool] : frame.descriptorPools) {
+                device->resetDescriptorPool(pool.get());
+            }
             frame.runDeletionQueue(*this);
         }
 
@@ -200,8 +209,6 @@ void Context::beginFrame() {
     waitFrame();
 
     {
-        // std::unique_lock deviceLock{commandPoolMutex};
-
         frame.primaryCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
         frame.primaryCommandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
@@ -215,7 +222,10 @@ void Context::beginFrame() {
         }
     }
 
-    device->resetDescriptorPool(getCurrentDescriptorPool().get());
+    // TODO: if we didn't already do this above?
+    for (auto& [_, pool] : frame.descriptorPools) {
+        device->resetDescriptorPool(pool.get());
+    }
     frame.runDeletionQueue(*this);
 
     if (platformSurface) {
@@ -310,7 +320,7 @@ std::unique_ptr<gfx::CommandEncoder> Context::createCommandEncoder() {
 const vk::UniqueCommandBuffer& Context::getSecondaryCommandBuffer(std::int32_t layerIndex) {
     auto& frame = frameResources[frameResourceIndex];
 
-    std::unique_lock lock(frame.secondaryCommandBufferMutex);
+    std::lock_guard lock{frame.secondaryCommandBufferMutex};
 
     frame.secondaryCommandBufferBegin.resize(
         std::max<std::size_t>(frame.secondaryCommandBufferBegin.size(), layerIndex + 1));
@@ -318,8 +328,6 @@ const vk::UniqueCommandBuffer& Context::getSecondaryCommandBuffer(std::int32_t l
     // Create the secondary buffer for the requested layer, if it doesn't already exist
     auto& buffer = frame.secondaryCommandBuffers[layerIndex];
     if (!buffer) {
-        // std::unique_lock deviceLock{commandPoolMutex};
-
         auto& pool = backend.getCommandPool(layerIndex);
         const vk::CommandBufferAllocateInfo allocateInfo(pool.get(), vk::CommandBufferLevel::eSecondary, 1);
         buffer = std::move(backend.getDevice()->allocateCommandBuffersUnique(allocateInfo).front());
@@ -330,8 +338,6 @@ const vk::UniqueCommandBuffer& Context::getSecondaryCommandBuffer(std::int32_t l
 
     // Begin the secondary buffer, if we haven't already done so this frame
     if (!frame.secondaryCommandBufferBegin[layerIndex]) {
-        // std::unique_lock deviceLock{commandPoolMutex};
-
         const auto& renderableResource = backend.getDefaultRenderable().getResource<SurfaceRenderableResource>();
         const auto& renderPass = renderableResource.getRenderPass();
         const auto& frameBuffer = renderableResource.getFramebuffer();
@@ -466,6 +472,8 @@ bool Context::renderTileClippingMasks(std::int32_t layerIndex,
                                       const std::vector<shaders::ClipUBO>& tileUBOs) {
     using ShaderClass = shaders::ShaderSource<shaders::BuiltIn::ClippingMaskProgram, gfx::Backend::Type::Vulkan>;
 
+    std::unique_lock lock{clippingMutex};
+
     if (!clipping.shader) {
         const auto group = staticData.shaders->getShaderGroup("ClippingMaskProgram");
         if (group) {
@@ -527,10 +535,12 @@ bool Context::renderTileClippingMasks(std::int32_t layerIndex,
 
     clipping.pipelineInfo.setRenderable(renderPassImpl.getDescriptor().renderable);
 
-    const auto& pipeline = shaderImpl.getPipeline(clipping.pipelineInfo);
+    const auto& pipeline = shaderImpl.getPipeline(clipping.pipelineInfo, layerIndex);
 
     commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.get());
     clipping.pipelineInfo.setDynamicValues(backend, commandBuffer);
+
+    lock.unlock();
 
     const std::array<vk::Buffer, 1> vertexBuffers = {clipping.vertexBuffer->getVulkanBuffer()};
     const std::array<vk::DeviceSize, 1> offset = {0};
@@ -587,6 +597,8 @@ const std::unique_ptr<Texture2D>& Context::getDummyTexture() {
 }
 
 const vk::UniqueDescriptorSetLayout& Context::getUniformDescriptorSetLayout() {
+    std::lock_guard lock{descriptorSetMutex};
+
     if (!uniformDescriptorSetLayout) {
         std::vector<vk::DescriptorSetLayoutBinding> bindings;
         const auto stageFlags = vk::ShaderStageFlags() | vk::ShaderStageFlagBits::eVertex |
@@ -610,6 +622,8 @@ const vk::UniqueDescriptorSetLayout& Context::getUniformDescriptorSetLayout() {
 }
 
 const vk::UniqueDescriptorSetLayout& Context::getImageDescriptorSetLayout() {
+    std::lock_guard lock{descriptorSetMutex};
+
     if (!imageDescriptorSetLayout) {
         std::vector<vk::DescriptorSetLayoutBinding> bindings;
 
@@ -630,6 +644,8 @@ const vk::UniqueDescriptorSetLayout& Context::getImageDescriptorSetLayout() {
 }
 
 const std::vector<vk::DescriptorSetLayout>& Context::getDescriptorSetLayouts() {
+    std::lock_guard lock{descriptorSetMutex};
+
     if (descriptorSetLayouts.empty()) {
         descriptorSetLayouts = {getUniformDescriptorSetLayout().get(), getImageDescriptorSetLayout().get()};
     }
@@ -638,6 +654,8 @@ const std::vector<vk::DescriptorSetLayout>& Context::getDescriptorSetLayouts() {
 }
 
 const vk::UniquePipelineLayout& Context::getGeneralPipelineLayout() {
+    std::lock_guard lock{descriptorSetMutex};
+
     if (generalPipelineLayout) return generalPipelineLayout;
 
     const auto& descriptorLayouts = getDescriptorSetLayouts();
@@ -651,6 +669,8 @@ const vk::UniquePipelineLayout& Context::getGeneralPipelineLayout() {
 }
 
 const vk::UniquePipelineLayout& Context::getPushConstantPipelineLayout() {
+    std::lock_guard lock{descriptorSetMutex};
+
     if (pushConstantPipelineLayout) return pushConstantPipelineLayout;
 
     const auto stages = vk::ShaderStageFlags() | vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
