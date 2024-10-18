@@ -135,6 +135,8 @@ const vk::UniqueDescriptorPool& Context::getDescriptorPool(std::int32_t /*std::o
 }
 
 void Context::enqueueDeletion(std::function<void(const Context&)>&& function) {
+    std::lock_guard lock(frameResources[frameResourceIndex].descriptorPoolsMutex);
+
     if (frameResources.empty()) {
         function(*this);
         return;

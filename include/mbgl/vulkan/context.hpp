@@ -165,7 +165,7 @@ private:
         vk::UniqueCommandBuffer uploadCommandBuffer;
 
         // map instead of vector to provide stable value references
-        mbgl::unordered_map<int32_t, vk::UniqueCommandBuffer> secondaryCommandBuffers;
+        std::map<int32_t, vk::UniqueCommandBuffer> secondaryCommandBuffers;
         std::vector<bool> secondaryCommandBufferBegin;
         std::mutex secondaryCommandBufferMutex;
 
