@@ -90,6 +90,8 @@ public:
         }
     }
 
+    std::size_t getThreadCount() const override { return threads.size(); }
+
     void runOnRenderThread(const util::SimpleIdentity tag, std::function<void()>&& fn) override {
         std::shared_ptr<RenderQueue> queue;
         {

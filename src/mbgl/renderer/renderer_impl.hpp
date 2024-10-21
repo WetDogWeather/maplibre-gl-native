@@ -1,7 +1,8 @@
 #pragma once
 
-#include <mbgl/renderer/render_orchestrator.hpp>
 #include <mbgl/gfx/context_observer.hpp>
+#include <mbgl/renderer/render_orchestrator.hpp>
+#include <mbgl/util/thread_pool.hpp>
 
 #if MLN_RENDER_BACKEND_METAL
 #include <mbgl/mtl/mtl_fwd.hpp>
@@ -63,6 +64,9 @@ private:
 
 #if MLN_RENDER_BACKEND_METAL
     mtl::MTLCaptureScopePtr commandCaptureScope;
+#elif MLN_RENDER_BACKEND_VULKAN
+    // High-priority thread pool only for short, render-related tasks
+    ParallelScheduler rendererThreadPool;
 #endif // MLN_RENDER_BACKEND_METAL
 };
 

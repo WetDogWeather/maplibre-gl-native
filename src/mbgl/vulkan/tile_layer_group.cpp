@@ -9,6 +9,7 @@
 #include <mbgl/vulkan/render_pass.hpp>
 #include <mbgl/renderer/paint_parameters.hpp>
 #include <mbgl/util/convert.hpp>
+#include <mbgl/util/instrumentation.hpp>
 #include <mbgl/util/logging.hpp>
 
 namespace mbgl {
@@ -21,6 +22,8 @@ void TileLayerGroup::upload(gfx::UploadPass& uploadPass) {
     if (!enabled || !getDrawableCount()) {
         return;
     }
+
+    MLN_TRACE_FUNC();
 
 #if !defined(NDEBUG)
     const auto debugGroup = uploadPass.createDebugGroup(getLayerIndex(), getName() + "-upload");
@@ -38,6 +41,8 @@ void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
     if (!enabled || !getDrawableCount() || !parameters.getRenderPass()) {
         return;
     }
+
+    MLN_TRACE_FUNC();
 
     auto& renderPass = static_cast<RenderPass&>(*parameters.getRenderPass());
 

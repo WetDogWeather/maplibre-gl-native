@@ -62,7 +62,8 @@ Renderer::Impl::Impl(gfx::RendererBackend& backend_,
     : orchestrator(!backend_.contextIsShared(), backend_.getThreadPool(), localFontFamily_),
       backend(backend_),
       observer(&nullObserver()),
-      pixelRatio(pixelRatio_) {}
+      pixelRatio(pixelRatio_),
+      rendererThreadPool(3) {}
 
 Renderer::Impl::~Impl() {
     assert(gfx::BackendScope::exists());
@@ -264,7 +265,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 #endif
 
         // Tweakers are run in the upload pass so they can set up uniforms.
-        orchestrator.visitLayerGroups(*Scheduler::GetBackground(), [&](LayerGroupBase& layerGroup) {
+        orchestrator.visitLayerGroups(rendererThreadPool, [&](LayerGroupBase& layerGroup) {
             layerGroup.runTweakers(renderTree, parameters);
         });
         orchestrator.visitDebugLayerGroups(
@@ -274,7 +275,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         orchestrator.updateDebugLayerGroups(renderTree, parameters);
 
         // Give the layers a chance to upload
-        orchestrator.visitLayerGroups(*Scheduler::GetBackground(), [&](LayerGroupBase& layerGroup) {
+        orchestrator.visitLayerGroups(rendererThreadPool, [&](LayerGroupBase& layerGroup) {
             initScope();
             layerGroup.upload(*uploadPass);
         });
@@ -395,7 +396,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
                                     (maxLayerIndex + 3) * PaintParameters::numSublayers * PaintParameters::depthEpsilon;
 
         // draw layer groups, opaque pass
-        orchestrator.visitLayerGroups(*Scheduler::GetBackground(), [&](LayerGroupBase& layerGroup) {
+        orchestrator.visitLayerGroups(rendererThreadPool, [&](LayerGroupBase& layerGroup) {
             initScope();
             PaintParameters copy{parameters};
             copy.currentLayer = layerGroup.getLayerIndex();
@@ -411,7 +412,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
                                     (maxLayerIndex + 3) * PaintParameters::numSublayers * PaintParameters::depthEpsilon;
 
         // draw layer groups, translucent pass
-        orchestrator.visitLayerGroups(*Scheduler::GetBackground(), [&](LayerGroupBase& layerGroup) {
+        orchestrator.visitLayerGroups(rendererThreadPool, [&](LayerGroupBase& layerGroup) {
             initScope();
             PaintParameters copy{parameters};
             copy.currentLayer = maxLayerIndex - layerGroup.getLayerIndex();
@@ -541,7 +542,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
 #if MLN_DRAWABLE_RENDERER
     // Give the layers a chance to do cleanup
-    orchestrator.visitLayerGroups(*Scheduler::GetBackground(),
+    orchestrator.visitLayerGroups(rendererThreadPool,
                                   [&](LayerGroupBase& layerGroup) { layerGroup.postRender(orchestrator, parameters); });
     context.unbindGlobalUniformBuffers(*parameters.getRenderPass());
 #endif

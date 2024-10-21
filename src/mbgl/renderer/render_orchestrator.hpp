@@ -19,6 +19,7 @@
 
 #include <map>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -124,11 +125,15 @@ public:
 
     template <typename Func /* void(LayerGroupBase&) */>
     void visitLayerGroups(Scheduler& scheduler, Func f) {
-        std::latch latch(layerGroupsByLayerIndex.size());
-        for (auto& [index, group] : layerGroupsByLayerIndex) {
-            scheduler.schedule([&] {
-                if (group) {
-                    f(*group);
+        // Submit one task per available thread, running the function on the corresponding item in each group
+        const auto threadCount = scheduler.getThreadCount();
+        std::latch latch(threadCount);
+        for (const auto threadIndex : std::views::iota(0ULL, threadCount)) {
+            scheduler.schedule([&,threadIndex,threadCount] {
+                for (auto& [index, group] : layerGroupsByLayerIndex) {
+                    if (group && (index % threadCount) == threadIndex) {
+                        f(*group);
+                    }
                 }
                 latch.count_down();
             });

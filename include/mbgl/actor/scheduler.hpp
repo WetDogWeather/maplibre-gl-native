@@ -38,6 +38,8 @@ class Scheduler {
 public:
     virtual ~Scheduler() = default;
 
+    virtual std::size_t getThreadCount() const { return 1; }
+
     /// Enqueues a function for execution.
     virtual void schedule(std::function<void()>&&) = 0;
     virtual void schedule(const util::SimpleIdentity, std::function<void()>&&) = 0;
