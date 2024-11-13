@@ -82,6 +82,7 @@ std::unique_ptr<GeometryTileData> VectorTileData::clone() const {
 
 std::unique_ptr<GeometryTileLayer> VectorTileData::getLayer(const std::string& name) const {
     MLN_TRACE_FUNC();
+    MLN_ZONE_STR(name);
 
     if (!parsed) {
         // We're parsing this lazily so that we can construct VectorTileData

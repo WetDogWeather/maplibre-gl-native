@@ -2,6 +2,8 @@
 
 #include <mbgl/gfx/renderer_backend.hpp>
 #include <mbgl/gfx/context.hpp>
+#include <mbgl/util/containers.hpp>
+#include <mbgl/util/thread_pool.hpp>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 
@@ -24,6 +26,9 @@
 //  #define ENABLE_VMA_DEBUG
 #endif
 
+#include <shared_mutex>
+#include <thread>
+
 namespace mbgl {
 
 class ProgramParameters;
@@ -39,10 +44,17 @@ public:
     void initShaders(gfx::ShaderRegistry&, const ProgramParameters& programParameters) override;
     void init();
 
+    Scheduler* getRenderThreadPool() noexcept override {
+        return renderThreadScheduler ? &*renderThreadScheduler : nullptr;
+    }
+    std::size_t getRenderThreadCount() noexcept override {
+        return renderThreadScheduler ? renderThreadScheduler->getThreadCount() : 0;
+    }
+
     const vk::UniqueInstance& getInstance() const { return instance; }
     const vk::PhysicalDevice& getPhysicalDevice() const { return physicalDevice; }
     const vk::UniqueDevice& getDevice() const { return device; }
-    const vk::UniqueCommandPool& getCommandPool() const { return commandPool; }
+    const vk::UniqueCommandPool& getCommandPool(std::optional<std::int32_t> layerIndex = {});
     const vk::Queue& getGraphicsQueue() const { return graphicsQueue; }
     const vk::Queue& getPresentQueue() const { return presentQueue; }
     uint32_t getMaxFrames() const { return maxFrames; }
@@ -107,10 +119,14 @@ protected:
     vk::Queue graphicsQueue;
     vk::Queue presentQueue;
 
-    vk::UniqueCommandPool commandPool;
+    mbgl::unordered_map<std::optional<std::int32_t>, vk::UniqueCommandPool> commandPoolByLayer;
+    std::shared_mutex commandPoolMutex;
+
     uint32_t maxFrames = 1;
 
     VmaAllocator allocator;
+
+    std::optional<ThreadedScheduler> renderThreadScheduler;
 
     bool debugUtilsEnabled{false};
 };

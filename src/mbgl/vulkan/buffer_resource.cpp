@@ -23,7 +23,9 @@ bool BufferAllocation::create(const VmaAllocationCreateInfo& allocInfo, const vk
         return false;
     }
 
+    assert(buffer_);
     buffer = vk::Buffer(buffer_);
+    assert(buffer);
     return true;
 }
 
@@ -80,6 +82,7 @@ BufferResource::BufferResource(
 
     bufferAllocation = std::make_shared<BufferAllocation>(allocator);
     if (!bufferAllocation->create(allocationInfo, bufferInfo)) {
+        assert(false);
         mbgl::Log::Error(mbgl::Event::Render, "Vulkan buffer allocation failed");
         return;
     }

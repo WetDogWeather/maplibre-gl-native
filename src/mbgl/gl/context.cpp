@@ -552,7 +552,7 @@ bool Context::emplaceOrUpdateUniformBuffer(gfx::UniformBufferPtr& buffer,
     }
 }
 
-void Context::bindGlobalUniformBuffers(gfx::RenderPass&) const noexcept {
+void Context::bindGlobalUniformBuffers(gfx::RenderPass&, std::optional<std::size_t> /*threadIndex*/) noexcept {
     MLN_TRACE_FUNC();
 
     for (size_t id = 0; id < globalUniformBuffers.allocatedSize(); id++) {
@@ -568,7 +568,7 @@ void Context::bindGlobalUniformBuffers(gfx::RenderPass&) const noexcept {
     }
 }
 
-void Context::unbindGlobalUniformBuffers(gfx::RenderPass&) const noexcept {
+void Context::unbindGlobalUniformBuffers(gfx::RenderPass&, std::optional<std::size_t> /*threadIndex*/) noexcept {
     MLN_TRACE_FUNC();
 
     for (size_t id = 0; id < globalUniformBuffers.allocatedSize(); id++) {

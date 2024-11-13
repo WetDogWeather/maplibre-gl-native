@@ -35,16 +35,20 @@ protected:
     UploadPass() = default;
 
     friend class DebugGroup<UploadPass>;
-    virtual void pushDebugGroup(const char* name) = 0;
-    virtual void popDebugGroup() = 0;
+    virtual void pushDebugGroup(std::optional<std::size_t> threadIndex, const char* name) = 0;
+    virtual void popDebugGroup(std::optional<std::size_t> threadIndex) = 0;
 
 public:
     virtual ~UploadPass() = default;
     UploadPass(const UploadPass&) = delete;
     UploadPass& operator=(const UploadPass&) = delete;
 
-    DebugGroup<UploadPass> createDebugGroup(const char* name) { return {*this, name}; }
-    DebugGroup<UploadPass> createDebugGroup(std::string_view name) { return createDebugGroup(name.data()); }
+    DebugGroup<UploadPass> createDebugGroup(std::optional<std::size_t> threadIndex, const char* name) {
+        return {*this, threadIndex, name};
+    }
+    DebugGroup<UploadPass> createDebugGroup(std::optional<std::size_t> threadIndex, std::string_view name) {
+        return {*this, threadIndex, name.data()};
+    }
 
 #if MLN_DRAWABLE_RENDERER
     virtual Context& getContext() = 0;

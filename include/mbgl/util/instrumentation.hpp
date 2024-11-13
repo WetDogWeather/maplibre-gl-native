@@ -53,6 +53,17 @@ constexpr const char* tracyConstMemoryLabel = "Constant Buffer Memory";
 #define MLN_TRACE_ALLOC_CONST_BUFFER(id, size) TracyAllocN(castGpuIdToTracyPtr(id), size, tracyConstMemoryLabel)
 #define MLN_TRACE_FREE_CONST_BUFFER(id) TracyFreeN(castGpuIdToTracyPtr(id), tracyConstMemoryLabel)
 
+#define MLN_TRACE_LOCKABLE(type, name) TracyLockable(type, name)
+#define MLN_TRACE_CONDITION_VAR std::condition_variable_any
+#define MLN_LOCK_NAME(var, ptr, size) LockableName(var, ptr, size)
+#define MLN_LOCK_NAME_STR(var, str) LockableName(var, str.c_str(), str.size())
+
+#define MLN_TRACE_THREAD_NAME(str) tracy::SetThreadName(str)
+#define MLN_TRACE_THREAD_NAME_STR(str) tracy::SetThreadName(str.c_str())
+
+#define MLN_TRACE_THREAD_NAME_HINT(str, n) tracy::SetThreadNameWithHint(str, static_cast<int32_t>(n))
+#define MLN_TRACE_THREAD_NAME_HINT_STR(str, n) tracy::SetThreadNameWithHint(str.c_str(), static_cast<int32_t>(n))
+
 // Only OpenGL is currently considered for GPU profiling
 // Metal and other APIs need to be handled separately
 #if MLN_RENDER_BACKEND_OPENGL
@@ -107,6 +118,8 @@ constexpr const char* tracyConstMemoryLabel = "Constant Buffer Memory";
 
 #else // MLN_TRACY_ENABLE
 
+#define MLN_TRACE_FUNC() ((void)0)
+#define MLN_TRACE_ZONE(label) ((void)0)
 #define MLN_TRACE_GL_CONTEXT() ((void)0)
 #define MLN_TRACE_GL_ZONE(label) ((void)0)
 #define MLN_ZONE_TEXT(label) ((void)0)
@@ -124,7 +137,13 @@ constexpr const char* tracyConstMemoryLabel = "Constant Buffer Memory";
 #define MLN_TRACE_FREE_INDEX_BUFFER(id) ((void)0)
 #define MLN_TRACE_ALLOC_CONST_BUFFER(id, size) ((void)0)
 #define MLN_TRACE_FREE_CONST_BUFFER(id) ((void)0)
-#define MLN_TRACE_FUNC() ((void)0)
-#define MLN_TRACE_ZONE(label) ((void)0)
+#define MLN_TRACE_LOCKABLE(type, name) type name
+#define MLN_TRACE_CONDITION_VAR std::condition_variable
+#define MLN_LOCK_NAME(var, ptr, size) ((void)0)
+#define MLN_LOCK_NAME_STR(var, str) ((void)0)
+#define MLN_TRACE_THREAD_NAME(str) ((void)0)
+#define MLN_TRACE_THREAD_NAME_STR(str) ((void)0)
+#define MLN_TRACE_THREAD_NAME_HINT(str, n) ((void)0)
+#define MLN_TRACE_THREAD_NAME_HINT_STR(str, n) ((void)0)
 
 #endif // MLN_TRACY_ENABLE

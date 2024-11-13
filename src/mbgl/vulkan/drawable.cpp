@@ -28,6 +28,7 @@
 namespace mbgl {
 namespace vulkan {
 
+namespace {
 struct IndexBuffer : public gfx::IndexBufferBase {
     IndexBuffer(std::unique_ptr<gfx::IndexBuffer>&& buffer_)
         : buffer(std::move(buffer_)) {}
@@ -50,6 +51,7 @@ static std::string debugLabel(const gfx::Drawable& drawable) {
     return oss.str();
 }
 #endif // !defined(NDEBUG)
+} // namespace
 
 Drawable::Drawable(std::string name_)
     : gfx::Drawable(std::move(name_)),
@@ -129,7 +131,7 @@ void Drawable::updateVertexAttributes(gfx::VertexAttributeArrayPtr vertices,
     impl->segments = std::move(drawSegs);
 }
 
-void Drawable::upload(gfx::UploadPass& uploadPass_) {
+void Drawable::upload(gfx::UploadPass& uploadPass_, [[maybe_unused]] PaintParameters& parameters) {
     MLN_TRACE_FUNC();
 
     if (isCustom) {
@@ -153,6 +155,7 @@ void Drawable::upload(gfx::UploadPass& uploadPass_) {
     }
 
     if (!impl->indexes->getBuffer() || impl->indexes->getDirty()) {
+        MLN_TRACE_ZONE(indexes);
         // Create a buffer for the index data.  We don't update any
         // existing buffer because it may still be in use by the previous frame.
         auto indexBufferResource{uploadPass.createIndexBufferResource(
@@ -170,8 +173,9 @@ void Drawable::upload(gfx::UploadPass& uploadPass_) {
                               impl->pipelineInfo.inputAttributes.empty();
 
     if (buildAttribs) {
+        MLN_TRACE_ZONE(atributes);
 #if !defined(NDEBUG)
-        const auto debugGroup = uploadPass.createDebugGroup(debugLabel(*this));
+        const auto debugGroup = uploadPass.createDebugGroup(parameters.renderThreadIndex, debugLabel(*this));
 #endif
 
         if (!vertexAttributes) {
@@ -192,9 +196,7 @@ void Drawable::upload(gfx::UploadPass& uploadPass_) {
 
         vertexAttributes->visitAttributes([](gfx::VertexAttribute& attrib) { attrib.setDirty(false); });
 
-        if (impl->attributeBindings != attributeBindings_) {
-            impl->attributeBindings = std::move(attributeBindings_);
-        }
+        impl->attributeBindings = std::move(attributeBindings_);
     }
 
     // build instance buffer
@@ -202,6 +204,7 @@ void Drawable::upload(gfx::UploadPass& uploadPass_) {
         (instanceAttributes && (!attributeUpdateTime || instanceAttributes->isModifiedAfter(*attributeUpdateTime)));
 
     if (buildInstanceBuffer) {
+        MLN_TRACE_ZONE(buildInstanceBuffer);
         // Build instance attribute buffers
         std::vector<std::unique_ptr<gfx::VertexBufferResource>> instanceBuffers;
         auto instanceBindings_ = uploadPass.buildAttributeBindings(instanceAttributes->getMaxCount(),
@@ -215,11 +218,9 @@ void Drawable::upload(gfx::UploadPass& uploadPass_) {
                                                                    instanceBuffers);
 
         // clear dirty flag
-        instanceAttributes->visitAttributes([](gfx::VertexAttribute& attrib) { attrib.setDirty(false); });
+        instanceAttributes->visitAttributes([](auto& attrib) { attrib.setDirty(false); });
 
-        if (impl->instanceBindings != instanceBindings_) {
-            impl->instanceBindings = std::move(instanceBindings_);
-        }
+        impl->instanceBindings = std::move(instanceBindings_);
     }
 
     if (buildAttribs || buildInstanceBuffer) {
@@ -236,6 +237,10 @@ void Drawable::upload(gfx::UploadPass& uploadPass_) {
     attributeUpdateTime = util::MonotonicTimer::now();
 }
 
+void Drawable::preDraw(PaintParameters& parameters) {
+    impl->uniformBuffers.init(parameters.context, parameters.renderThreadCount);
+}
+
 void Drawable::draw(PaintParameters& parameters) const {
     MLN_TRACE_FUNC();
 
@@ -244,14 +249,17 @@ void Drawable::draw(PaintParameters& parameters) const {
     }
 
     auto& context = static_cast<Context&>(parameters.context);
-    auto& renderPass_ = static_cast<RenderPass&>(*parameters.renderPass);
+    auto& renderPass_ = static_cast<RenderPass&>(*parameters.getRenderPass());
     auto& encoder = renderPass_.getEncoder();
-    auto& commandBuffer = encoder.getCommandBuffer();
-
+    auto& commandBuffer = encoder.getCommandBuffer(parameters.renderThreadIndex);
     auto& shaderImpl = static_cast<mbgl::vulkan::ShaderProgram&>(*shader);
 
-    if (!bindAttributes(encoder)) return;
-    if (!bindDescriptors(encoder)) return;
+#if !defined(NDEBUG)
+    const auto debugGroup = renderPass_.createDebugGroup(parameters.renderThreadIndex, debugLabel(*this).c_str());
+#endif
+
+    if (!bindAttributes(encoder, parameters.renderThreadIndex)) return;
+    if (!bindDescriptors(encoder, parameters.renderThreadCount, parameters.renderThreadIndex)) return;
 
     if (is3D) {
         impl->pipelineInfo.setDepthMode(impl->depthFor3D);
@@ -277,23 +285,28 @@ void Drawable::draw(PaintParameters& parameters) const {
     const auto instances = instanceAttributes ? instanceAttributes->getMaxCount() : 1;
 
     for (const auto& seg : impl->segments) {
+        MLN_TRACE_ZONE(segment);
         const auto& segment = seg->getSegment();
 
         // update pipeline info with per segment modifiers
         impl->pipelineInfo.setDrawMode(seg->getMode());
-
         impl->pipelineInfo.setDynamicValues(context.getBackend(), commandBuffer);
 
-        const auto& pipeline = shaderImpl.getPipeline(impl->pipelineInfo);
-        commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.get());
+        const auto& pipeline = shaderImpl.getPipeline(impl->pipelineInfo, parameters.renderThreadIndex);
+        {
+            MLN_TRACE_ZONE(bind pipeline);
+            commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.get());
+        }
 
         if (segment.indexLength) {
+            MLN_TRACE_ZONE(drawIndexed);
             commandBuffer->drawIndexed(static_cast<uint32_t>(segment.indexLength),
                                        static_cast<uint32_t>(instances),
                                        static_cast<uint32_t>(segment.indexOffset),
                                        static_cast<int32_t>(segment.vertexOffset),
                                        0);
         } else {
+            MLN_TRACE_ZONE(draw);
             commandBuffer->draw(static_cast<uint32_t>(segment.vertexLength),
                                 static_cast<uint32_t>(instances),
                                 static_cast<uint32_t>(segment.vertexOffset),
@@ -350,9 +363,13 @@ void Drawable::buildVulkanInputBindings() noexcept {
     std::vector<const gfx::VertexBufferResource*> uniqueBuffers;
 
     const auto buildBindings = [&](const gfx::AttributeBindingArray& bindings, vk::VertexInputRate inputRate) {
+        MLN_TRACE_ZONE(bindings);
         for (size_t i = 0; i < bindings.size(); ++i) {
             const auto& binding = bindings[i];
             if (!binding.has_value() || !binding->vertexBufferResource) continue;
+
+            MLN_TRACE_ZONE(binding);
+            MLN_ZONE_VALUE(i);
 
             const auto& vertexBuffer = static_cast<const VertexBufferResource*>(binding->vertexBufferResource);
             const auto& buffer = vertexBuffer->get();
@@ -371,6 +388,7 @@ void Drawable::buildVulkanInputBindings() noexcept {
                                                                .setStride(binding->vertexStride)
                                                                .setInputRate(inputRate));
 
+                assert(buffer.getVulkanBuffer());
                 impl->vulkanVertexBuffers.push_back(buffer.getVulkanBuffer());
                 impl->vulkanVertexOffsets.push_back(0u);
             } else {
@@ -392,12 +410,12 @@ void Drawable::buildVulkanInputBindings() noexcept {
     impl->pipelineInfo.updateVertexInputHash();
 }
 
-bool Drawable::bindAttributes(CommandEncoder& encoder) const noexcept {
+bool Drawable::bindAttributes(CommandEncoder& encoder, std::optional<std::size_t> threadIndex) const noexcept {
     MLN_TRACE_FUNC();
 
     if (impl->vulkanVertexBuffers.empty()) return false;
 
-    const auto& commandBuffer = encoder.getCommandBuffer();
+    const auto& commandBuffer = encoder.getCommandBuffer(threadIndex);
 
     commandBuffer->bindVertexBuffers(0, impl->vulkanVertexBuffers, impl->vulkanVertexOffsets);
 
@@ -411,32 +429,35 @@ bool Drawable::bindAttributes(CommandEncoder& encoder) const noexcept {
     return true;
 }
 
-bool Drawable::bindDescriptors(CommandEncoder& encoder) const noexcept {
+bool Drawable::bindDescriptors(CommandEncoder& encoder,
+                               size_t threadCount,
+                               std::optional<std::size_t> threadIndex) const noexcept {
     MLN_TRACE_FUNC();
 
     if (!shader) return false;
 
     // bind uniforms
-    impl->uniformBuffers.bindDescriptorSets(encoder);
+    impl->uniformBuffers.bindDescriptorSets(encoder, threadIndex);
 
     const auto& shaderImpl = static_cast<const mbgl::vulkan::ShaderProgram&>(*shader);
     if (shaderImpl.hasTextures()) {
         // update image set
         if (!impl->imageDescriptorSet) {
-            impl->imageDescriptorSet = std::make_unique<ImageDescriptorSet>(encoder.getContext());
+            impl->imageDescriptorSet = std::make_unique<ImageDescriptorSet>(encoder.getContext(), threadCount);
         }
 
+        // If a texture (or sampler) is updated, we will have to rebuild the descriptors
         for (const auto& texture : textures) {
             if (!texture) continue;
             const auto textureImpl = static_cast<const Texture2D*>(texture.get());
-            if (textureImpl->isDirty()) {
+            if (textureImpl && textureImpl->isDirty()) {
                 impl->imageDescriptorSet->markDirty(true);
                 break;
             }
         }
 
-        impl->imageDescriptorSet->update(textures);
-        impl->imageDescriptorSet->bind(encoder);
+        impl->imageDescriptorSet->update(textures, threadIndex);
+        impl->imageDescriptorSet->bind(encoder, threadIndex);
     }
 
     return true;

@@ -172,7 +172,7 @@ void RenderLineLayer::render(PaintParameters& parameters) {
             checkRenderability(parameters, programInstance.activeBindingCount(allAttributeBindings));
 
             programInstance.draw(parameters.context,
-                                 *parameters.renderPass,
+                                 *parameters.getRenderPass(),
                                  gfx::Triangles(),
                                  parameters.depthModeForSublayer(0, gfx::DepthMaskType::ReadOnly),
                                  parameters.stencilModeForClipping(tile.id),

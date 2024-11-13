@@ -10,18 +10,18 @@ RenderPass::RenderPass(gl::CommandEncoder& commandEncoder_,
                        const char* name,
                        const gfx::RenderPassDescriptor& descriptor)
     : commandEncoder(commandEncoder_),
-      debugGroup(commandEncoder.createDebugGroup(name)) {
+      debugGroup(commandEncoder.createDebugGroup(/*main thread*/ {}, name)) {
     descriptor.renderable.getResource<gl::RenderableResource>().bind();
-    const auto clearDebugGroup(commandEncoder.createDebugGroup("clear"));
+    const auto clearDebugGroup(commandEncoder.createDebugGroup({}, "clear"));
     commandEncoder.context.clear(descriptor.clearColor, descriptor.clearDepth, descriptor.clearStencil);
 }
 
-void RenderPass::pushDebugGroup(const char* name) {
-    commandEncoder.pushDebugGroup(name);
+void RenderPass::pushDebugGroup(std::optional<std::size_t> threadIndex, const char* name) {
+    commandEncoder.pushDebugGroup(threadIndex, name);
 }
 
-void RenderPass::popDebugGroup() {
-    commandEncoder.popDebugGroup();
+void RenderPass::popDebugGroup(std::optional<std::size_t> threadIndex) {
+    commandEncoder.popDebugGroup(threadIndex);
 }
 
 } // namespace gl

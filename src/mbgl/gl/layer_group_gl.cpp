@@ -20,7 +20,7 @@ using namespace platform;
 TileLayerGroupGL::TileLayerGroupGL(int32_t layerIndex_, std::size_t initialCapacity, std::string name_)
     : TileLayerGroup(layerIndex_, initialCapacity, std::move(name_)) {}
 
-void TileLayerGroupGL::upload(gfx::UploadPass& uploadPass) {
+void TileLayerGroupGL::upload(gfx::UploadPass& uploadPass, PaintParameters& parameters) {
     MLN_TRACE_FUNC();
     MLN_ZONE_STR(name);
 
@@ -40,8 +40,8 @@ void TileLayerGroupGL::upload(gfx::UploadPass& uploadPass) {
         if (const auto& tileID = drawable.getTileID()) {
             label = drawable.getName() + "/" + util::toString(*tileID);
         }
-        const auto labelPtr = (label.empty() ? drawable.getName() : label).c_str();
-        const auto debugGroup = uploadPass.createDebugGroup(labelPtr);
+        const auto debugGroup = uploadPass.createDebugGroup(parameters.renderThreadIndex,
+                                                            label.empty() ? drawable.getName() : label);
 #endif
 
         drawableGL.upload(uploadPass);
@@ -69,7 +69,7 @@ void TileLayerGroupGL::render(RenderOrchestrator&, PaintParameters& parameters) 
         MLN_TRACE_ZONE(clip masks);
 #if !defined(NDEBUG)
         const auto label_clip = getName() + (getName().empty() ? "" : "-") + "tile-clip-masks";
-        const auto debugGroupClip = parameters.encoder->createDebugGroup(label_clip.c_str());
+        const auto debugGroupClip = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex, label_clip);
 #endif
 
         // If we're using stencil clipping, we need to handle 3D features separately
@@ -89,15 +89,16 @@ void TileLayerGroupGL::render(RenderOrchestrator&, PaintParameters& parameters) 
         // If we're doing 2D stenciling and have any drawables with tile IDs,
         // render each tile into the stencil buffer with a different value.
         if (features3d) {
-            stencilMode3d = stencil3d ? parameters.stencilModeFor3D() : gfx::StencilMode::disabled();
+            stencilMode3d = stencil3d ? parameters.stencilModeFor3D(parameters.renderThreadIndex)
+                                      : gfx::StencilMode::disabled();
         } else if (stencilTiles && !stencilTiles->empty()) {
-            parameters.renderTileClippingMasks(stencilTiles);
+            parameters.renderTileClippingMasks(parameters.renderThreadIndex, stencilTiles);
         }
     }
 
 #if !defined(NDEBUG)
     const auto label_render = getName() + (getName().empty() ? "" : "-") + "render";
-    const auto debugGroupRender = parameters.encoder->createDebugGroup(label_render.c_str());
+    const auto debugGroupRender = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex, label_render);
 #endif
 
     bool bindUBOs = false;
@@ -113,7 +114,7 @@ void TileLayerGroupGL::render(RenderOrchestrator&, PaintParameters& parameters) 
                          util::toString(*tileID);
         }
         const auto labelPtr = (label_tile.empty() ? drawable.getName() : label_tile).c_str();
-        const auto debugGroupTile = parameters.encoder->createDebugGroup(labelPtr);
+        const auto debugGroupTile = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex, labelPtr);
 #endif
 
         for (const auto& tweaker : drawable.getTweakers()) {
@@ -167,7 +168,7 @@ void TileLayerGroupGL::unbindUniformBuffers() const {
 LayerGroupGL::LayerGroupGL(int32_t layerIndex_, std::size_t initialCapacity, std::string name_)
     : LayerGroup(layerIndex_, initialCapacity, std::move(name_)) {}
 
-void LayerGroupGL::upload(gfx::UploadPass& uploadPass) {
+void LayerGroupGL::upload(gfx::UploadPass& uploadPass, PaintParameters& parameters) {
     if (!enabled) {
         return;
     }
@@ -180,7 +181,7 @@ void LayerGroupGL::upload(gfx::UploadPass& uploadPass) {
         auto& drawableGL = static_cast<gl::DrawableGL&>(drawable);
 
 #if !defined(NDEBUG)
-        const auto debugGroup = uploadPass.createDebugGroup(drawable.getName().c_str());
+        const auto debugGroup = uploadPass.createDebugGroup(parameters.renderThreadIndex, drawable.getName());
 #endif
 
         drawableGL.upload(uploadPass);
@@ -199,7 +200,8 @@ void LayerGroupGL::render(RenderOrchestrator&, PaintParameters& parameters) {
         }
 
 #if !defined(NDEBUG)
-        const auto debugGroup = parameters.encoder->createDebugGroup(drawable.getName().c_str());
+        const auto debugGroup = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex,
+                                                                          drawable.getName());
 #endif
 
         for (const auto& tweaker : drawable.getTweakers()) {

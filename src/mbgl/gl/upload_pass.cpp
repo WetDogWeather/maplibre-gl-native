@@ -26,7 +26,7 @@ using namespace platform;
 
 UploadPass::UploadPass(gl::CommandEncoder& commandEncoder_, const char* name)
     : commandEncoder(commandEncoder_),
-      debugGroup(commandEncoder.createDebugGroup(name)) {}
+      debugGroup(commandEncoder.createDebugGroup(/*main thread*/ {}, name)) {}
 
 std::unique_ptr<gfx::VertexBufferResource> UploadPass::createVertexBufferResource(const void* data,
                                                                                   const std::size_t size,
@@ -315,12 +315,12 @@ gfx::AttributeBindingArray UploadPass::buildAttributeBindings(
 }
 #endif
 
-void UploadPass::pushDebugGroup(const char* name) {
-    commandEncoder.pushDebugGroup(name);
+void UploadPass::pushDebugGroup(std::optional<std::size_t> threadIndex, const char* name) {
+    commandEncoder.pushDebugGroup(threadIndex, name);
 }
 
-void UploadPass::popDebugGroup() {
-    commandEncoder.popDebugGroup();
+void UploadPass::popDebugGroup(std::optional<std::size_t> threadIndex) {
+    commandEncoder.popDebugGroup(threadIndex);
 }
 
 #if MLN_DRAWABLE_RENDERER

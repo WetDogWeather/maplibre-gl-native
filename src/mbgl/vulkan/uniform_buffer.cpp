@@ -13,7 +13,7 @@ UniformBuffer::UniformBuffer(BufferResource&& buffer_)
     : gfx::UniformBuffer(buffer_.getSizeInBytes()),
       buffer(std::move(buffer_)) {
     buffer.getContext().renderingStats().numUniformBuffers++;
-    buffer.getContext().renderingStats().memUniformBuffers += size;
+    buffer.getContext().renderingStats().memUniformBuffers += static_cast<int>(size);
 }
 
 UniformBuffer::UniformBuffer(UniformBuffer&& other)
@@ -22,15 +22,15 @@ UniformBuffer::UniformBuffer(UniformBuffer&& other)
 
 UniformBuffer::~UniformBuffer() {
     buffer.getContext().renderingStats().numUniformBuffers--;
-    buffer.getContext().renderingStats().memUniformBuffers -= size;
+    buffer.getContext().renderingStats().memUniformBuffers -= static_cast<int>(size);
 }
 
 void UniformBuffer::update(const void* data, std::size_t size_) {
-    assert(size == size_);
     if (size != size_ || size != buffer.getSizeInBytes()) {
         Log::Error(
             Event::General,
             "Mismatched size given to UBO update, expected " + std::to_string(size) + ", got " + std::to_string(size_));
+        assert(false);
         return;
     }
 
@@ -39,8 +39,27 @@ void UniformBuffer::update(const void* data, std::size_t size_) {
     buffer.update(data, size, /*offset=*/0);
 }
 
-const std::shared_ptr<gfx::UniformBuffer>& UniformBufferArray::set(const size_t id,
-                                                                   std::shared_ptr<gfx::UniformBuffer> uniformBuffer) {
+UniformBufferArray::UniformBufferArray(DescriptorSetType descriptorSetType_,
+                                       uint32_t descriptorStartIndex_,
+                                       uint32_t descriptorBindingCount_)
+    : descriptorSetType(descriptorSetType_),
+      descriptorStartIndex(descriptorStartIndex_),
+      descriptorBindingCount(descriptorBindingCount_) {}
+
+UniformBufferArray::UniformBufferArray(UniformBufferArray&& other)
+    : gfx::UniformBufferArray(std::move(other)),
+      descriptorSet(std::move(other.descriptorSet)) {}
+
+void UniformBufferArray::init(gfx::Context& context, std::size_t threadCount) {
+    if (!descriptorSet) {
+        descriptorSet = std::make_unique<UniformDescriptorSet>(
+            static_cast<Context&>(context), descriptorSetType, threadCount);
+    }
+}
+
+const std::shared_ptr<gfx::UniformBuffer>& UniformBufferArray::set(const std::size_t id,
+                                                                   std::shared_ptr<gfx::UniformBuffer> uniformBuffer,
+                                                                   std::optional<std::size_t> threadIndex) {
     if (id >= uniformBufferVector.size()) {
         return nullref;
     }
@@ -50,31 +69,39 @@ const std::shared_ptr<gfx::UniformBuffer>& UniformBufferArray::set(const size_t 
     }
 
     if (descriptorSet) {
-        descriptorSet->markDirty();
+        descriptorSet->markDirty(threadIndex);
     }
 
     uniformBufferVector[id] = std::move(uniformBuffer);
     return uniformBufferVector[id];
 }
 
-void UniformBufferArray::createOrUpdate(
-    const size_t id, const void* data, std::size_t size, gfx::Context& context, bool persistent) {
+void UniformBufferArray::createOrUpdate(const size_t id,
+                                        const void* data,
+                                        std::size_t size,
+                                        gfx::Context& context,
+                                        std::optional<std::size_t> threadIndex,
+                                        bool persistent) {
     if (descriptorSet) {
         if (auto& ubo = get(id); !ubo || ubo->getSize() != size) {
-            descriptorSet->markDirty();
+            descriptorSet->markDirty(threadIndex);
         }
     }
 
-    gfx::UniformBufferArray::createOrUpdate(id, data, size, context, persistent);
+    gfx::UniformBufferArray::createOrUpdate(id, data, size, context, threadIndex, persistent);
 }
 
-void UniformBufferArray::bindDescriptorSets(CommandEncoder& encoder) {
-    if (!descriptorSet) {
-        descriptorSet = std::make_unique<UniformDescriptorSet>(encoder.getContext(), descriptorSetType);
+void UniformBufferArray::bindDescriptorSets(CommandEncoder& encoder, std::optional<std::size_t> threadIndex) {
+    MLN_TRACE_FUNC();
+    assert(descriptorSet);
+    {
+        MLN_TRACE_ZONE(update);
+        descriptorSet->update(*this, descriptorStartIndex, descriptorBindingCount, threadIndex);
     }
-
-    descriptorSet->update(*this, descriptorStartIndex, descriptorBindingCount);
-    descriptorSet->bind(encoder);
+    {
+        MLN_TRACE_ZONE(bind);
+        descriptorSet->bind(encoder, threadIndex);
+    }
 }
 
 } // namespace vulkan

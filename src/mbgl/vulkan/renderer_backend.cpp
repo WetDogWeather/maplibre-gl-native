@@ -82,9 +82,17 @@ static bool checkAvailability(const std::vector<T>& availableValues,
     return true;
 }
 
+namespace {
+constexpr auto renderThreadCount = 2;
+}
+
 RendererBackend::RendererBackend(const gfx::ContextMode contextMode_)
     : gfx::RendererBackend(contextMode_),
-      allocator(nullptr) {}
+      allocator(nullptr) {
+    if (renderThreadCount) {
+        renderThreadScheduler.emplace(renderThreadCount, "Render");
+    }
+}
 
 RendererBackend::~RendererBackend() {
     destroyResources();
@@ -213,68 +221,64 @@ void RendererBackend::endFrameCapture() {
 
 #ifdef ENABLE_VULKAN_VALIDATION
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL vkDebugUtilsCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                                                           VkDebugUtilsMessageTypeFlagsEXT,
-                                                           const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
-                                                           void*) {
-    EventSeverity mbglSeverity = EventSeverity::Debug;
-
-    switch (messageSeverity) {
+namespace {
+EventSeverity getSeverity(VkDebugUtilsMessageSeverityFlagBitsEXT flag) {
+    switch (flag) {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-            mbglSeverity = EventSeverity::Debug;
-            break;
-
+            return EventSeverity::Debug;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-            mbglSeverity = EventSeverity::Info;
-            break;
-
+            return EventSeverity::Info;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-            mbglSeverity = EventSeverity::Warning;
-            break;
-
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-            mbglSeverity = EventSeverity::Error;
-            break;
-
+            return EventSeverity::Warning;
         default:
-            return VK_FALSE;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+            return EventSeverity::Error;
+    }
+}
+EventSeverity getSeverity(VkDebugReportFlagsEXT flags) {
+    switch (flags) {
+        case VK_DEBUG_REPORT_INFORMATION_BIT_EXT:
+            return EventSeverity::Info;
+        case VK_DEBUG_REPORT_WARNING_BIT_EXT:
+            return EventSeverity::Warning;
+        case VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT:
+            return EventSeverity::Warning;
+        default:
+        case VK_DEBUG_REPORT_ERROR_BIT_EXT:
+            return EventSeverity::Error;
+        case VK_DEBUG_REPORT_DEBUG_BIT_EXT:
+            return EventSeverity::Debug;
+    }
+}
+VKAPI_ATTR VkBool32 VKAPI_CALL vkDebugUtilsCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                                    VkDebugUtilsMessageTypeFlagsEXT,
+                                                    const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
+                                                    void*) {
+    // ignore "VUID-VkImageViewCreateInfo-imageViewFormatSwizzle-04465"
+    if (callbackData && callbackData->messageIdNumber == -2102505392) {
+        return VK_FALSE;
     }
 
-    mbgl::Log::Record(mbglSeverity, mbgl::Event::Render, callbackData->pMessage);
+    mbgl::Log::Record(getSeverity(messageSeverity), mbgl::Event::Render, callbackData->pMessage);
 
     return VK_FALSE;
 }
 
-static VKAPI_ATTR VkBool32 vkDebugReportCallback(VkDebugReportFlagsEXT flags,
-                                                 VkDebugReportObjectTypeEXT objectType,
-                                                 [[maybe_unused]] uint64_t object,
-                                                 [[maybe_unused]] size_t location,
-                                                 int32_t messageCode,
-                                                 const char* pLayerPrefix,
-                                                 const char* pMessage,
-                                                 [[maybe_unused]] void* pUserData) {
-    EventSeverity mbglSeverity = EventSeverity::Debug;
-
-    if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT) {
-        mbglSeverity = EventSeverity::Info;
-    } else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) {
-        mbglSeverity = EventSeverity::Warning;
-    } else if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) {
-        mbglSeverity = EventSeverity::Warning;
-    } else if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
-        mbglSeverity = EventSeverity::Error;
-    } else if (flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT) {
-        mbglSeverity = EventSeverity::Debug;
-    }
-
-    const std::string message = "[" + vk::to_string(vk::DebugReportObjectTypeEXT(objectType)) + "]" + "[code - " +
-                                std::to_string(messageCode) + "]" + "[layer - " + pLayerPrefix + "]" + pMessage;
-
-    mbgl::Log::Record(mbglSeverity, mbgl::Event::Render, message);
-
+VKAPI_ATTR VkBool32 vkDebugReportCallback(VkDebugReportFlagsEXT flags,
+                                          VkDebugReportObjectTypeEXT objectType,
+                                          [[maybe_unused]] uint64_t object,
+                                          [[maybe_unused]] size_t location,
+                                          int32_t messageCode,
+                                          const char* pLayerPrefix,
+                                          const char* pMessage,
+                                          [[maybe_unused]] void* pUserData) {
+    std::ostringstream ss;
+    ss << "[" << vk::to_string(vk::DebugReportObjectTypeEXT(objectType)) << "][code:" << messageCode
+       << "][layer:" << pLayerPrefix << "]" << pMessage;
+    mbgl::Log::Record(getSeverity(flags), mbgl::Event::Render, ss.str());
     return VK_FALSE;
 }
-
+} // namespace
 #endif
 
 void RendererBackend::initDebug() {
@@ -569,15 +573,18 @@ void RendererBackend::initSwapchain() {
 }
 
 void RendererBackend::initCommandPool() {
-    const vk::CommandPoolCreateInfo createInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, graphicsQueueIndex);
-    commandPool = device->createCommandPoolUnique(createInfo);
+    getCommandPool({});
 }
 
 void RendererBackend::destroyResources() {
     if (device) device->waitIdle();
 
     context.reset();
-    commandPool.reset();
+
+    {
+        std::unique_lock lock(commandPoolMutex);
+        commandPoolByLayer.clear();
+    }
 
     vmaDestroyAllocator(allocator);
 
@@ -645,6 +652,23 @@ void RendererBackend::initShaders(gfx::ShaderRegistry& shaders, const ProgramPar
                   shaders::BuiltIn::SymbolSDFIconShader,
                   shaders::BuiltIn::SymbolTextAndIconShader,
                   shaders::BuiltIn::WideVectorShader>(shaders, programParameters);
+}
+
+const vk::UniqueCommandPool& RendererBackend::getCommandPool(std::optional<std::int32_t> layerIndex) {
+    {
+        std::shared_lock lock(commandPoolMutex);
+        if (const auto hit = commandPoolByLayer.find(layerIndex); hit != commandPoolByLayer.end()) {
+            return hit->second;
+        }
+    }
+    std::unique_lock lock(commandPoolMutex);
+    const auto result = commandPoolByLayer.insert(std::make_pair(layerIndex, vk::UniqueCommandPool{}));
+    if (result.second) {
+        // new item inserted
+        result.first->second = device->createCommandPoolUnique(
+            {vk::CommandPoolCreateFlagBits::eResetCommandBuffer, static_cast<uint32_t>(graphicsQueueIndex)});
+    }
+    return result.first->second;
 }
 
 } // namespace vulkan

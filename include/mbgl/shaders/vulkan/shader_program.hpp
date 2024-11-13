@@ -8,7 +8,6 @@
 
 #include <optional>
 #include <string>
-#include <unordered_map>
 
 namespace mbgl {
 namespace shaders {
@@ -64,7 +63,7 @@ public:
     static constexpr std::string_view Name{"GenericVulkanShader"};
     const std::string_view typeName() const noexcept override { return Name; }
 
-    const vk::UniquePipeline& getPipeline(const PipelineInfo& pipelineInfo);
+    const vk::UniquePipeline& getPipeline(const PipelineInfo& pipelineInfo, std::optional<std::size_t> threadIndex);
 
     std::optional<size_t> getSamplerLocation(const size_t id) const override { return textureBindings[id]; }
     const gfx::VertexAttributeArray& getVertexAttributes() const override { return vertexAttributes; }
@@ -85,7 +84,8 @@ protected:
 
     vk::UniqueShaderModule vertexShader;
     vk::UniqueShaderModule fragmentShader;
-    std::unordered_map<std::size_t, vk::UniquePipeline> pipelines;
+
+    std::vector<vk::UniquePipeline> pipelines;
 
     UniformBlockArray uniformBlocks;
     VertexAttributeArray vertexAttributes;

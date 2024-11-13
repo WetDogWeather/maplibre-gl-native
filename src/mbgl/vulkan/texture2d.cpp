@@ -50,13 +50,12 @@ Texture2D::~Texture2D() {
 }
 
 gfx::Texture2D& Texture2D::setSamplerConfiguration(const SamplerState& samplerState_) noexcept {
-    if (samplerState.filter == samplerState_.filter && samplerState.wrapU == samplerState_.wrapU &&
-        samplerState.wrapV == samplerState_.wrapV) {
-        return *this;
-    }
+    std::lock_guard lock{samplerMutex};
+    if (samplerState_ != samplerState) {
 
-    samplerState = samplerState_;
-    samplerStateDirty = true;
+        samplerState = samplerState_;
+        samplerStateDirty = true;
+    }
     return *this;
 }
 
@@ -143,12 +142,9 @@ void Texture2D::upload(const void* pixelData, const Size& size_) noexcept {
 }
 
 void Texture2D::uploadSubRegion(const void* pixelData, const Size& size_, uint16_t xOffset, uint16_t yOffset) noexcept {
-    if (!pixelData || size_.width == 0 || size_.height == 0) return;
-
-    const auto& encoder = context.createCommandEncoder();
-    const auto& encoderImpl = static_cast<const CommandEncoder&>(*encoder);
-
-    uploadSubRegion(pixelData, size_, xOffset, yOffset, encoderImpl.getCommandBuffer());
+    if (pixelData && size_.width > 0 && size_.height > 0) {
+        uploadSubRegion(pixelData, size_, xOffset, yOffset, context.getUploadCommandBuffer());
+    }
 }
 
 void Texture2D::uploadSubRegion(const void* pixelData,
@@ -366,6 +362,7 @@ void Texture2D::createTexture() {
 }
 
 void Texture2D::createSampler() {
+    MLN_TRACE_FUNC();
     destroySampler();
 
     const auto filter = vulkanFilter(samplerState.filter);
@@ -468,6 +465,8 @@ void Texture2D::transitionToGeneralLayout(const vk::UniqueCommandBuffer& buffer)
 }
 
 const vk::Sampler& Texture2D::getVulkanSampler() {
+    std::lock_guard lock{samplerMutex};
+
     if (samplerStateDirty) {
         createSampler();
     }

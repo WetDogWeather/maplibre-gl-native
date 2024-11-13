@@ -22,8 +22,8 @@ public:
     void present(gfx::Renderable&) override;
 
 private:
-    void pushDebugGroup(const char* name) override;
-    void popDebugGroup() override;
+    void pushDebugGroup(std::optional<std::size_t> threadIndex, const char* name) override;
+    void popDebugGroup(std::optional<std::size_t> threadIndex) override;
 
 public:
     gl::Context& context;

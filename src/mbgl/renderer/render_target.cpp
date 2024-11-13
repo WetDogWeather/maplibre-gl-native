@@ -60,13 +60,13 @@ const LayerGroupBasePtr& RenderTarget::getLayerGroup(const int32_t layerIndex) c
     return (hit == layerGroupsByLayerIndex.end()) ? no_group : hit->second;
 }
 
-void RenderTarget::upload(gfx::UploadPass& uploadPass) {
-    visitLayerGroups(([&](LayerGroupBase& layerGroup) { layerGroup.upload(uploadPass); }));
+void RenderTarget::upload(gfx::UploadPass& uploadPass, PaintParameters& parameters) {
+    visitLayerGroups(([&](LayerGroupBase& layerGroup) { layerGroup.upload(uploadPass, parameters); }));
 }
 
 void RenderTarget::render(RenderOrchestrator& orchestrator, const RenderTree& renderTree, PaintParameters& parameters) {
-    parameters.renderPass = parameters.encoder->createRenderPass(
-        "render target", {*offscreenTexture, Color{0.0f, 0.0f, 0.0f, 1.0f}, {}, {}});
+    parameters.setRenderPass(parameters.getEncoder()->createRenderPass(
+        "render target", {*offscreenTexture, Color{0.0f, 0.0f, 0.0f, 1.0f}, {}, {}}));
 
     // Run layer tweakers to update any dynamic elements
     parameters.currentLayer = 0;
@@ -99,8 +99,8 @@ void RenderTarget::render(RenderOrchestrator& orchestrator, const RenderTree& re
         }
     });
 
-    parameters.renderPass.reset();
-    parameters.encoder->present(*offscreenTexture);
+    parameters.setRenderPass({});
+    parameters.getEncoder()->present(*offscreenTexture);
 }
 
 } // namespace mbgl

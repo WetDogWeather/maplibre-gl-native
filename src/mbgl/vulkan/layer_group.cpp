@@ -18,33 +18,34 @@ LayerGroup::LayerGroup(int32_t layerIndex_, std::size_t initialCapacity, std::st
     : mbgl::LayerGroup(layerIndex_, initialCapacity, std::move(name_)),
       uniformBuffers(DescriptorSetType::Layer, shaders::layerUBOStartId, shaders::maxUBOCountPerLayer) {}
 
-void LayerGroup::upload(gfx::UploadPass& uploadPass) {
+void LayerGroup::upload(gfx::UploadPass& uploadPass, PaintParameters& parameters) {
     if (!enabled) {
         return;
     }
 
 #if !defined(NDEBUG)
-    const auto debugGroup = uploadPass.createDebugGroup(getName() + "-upload");
+    const auto debugGroup = uploadPass.createDebugGroup(parameters.renderThreadIndex, getName() + "-upload");
 #endif
 
     visitDrawables([&](gfx::Drawable& drawable_) {
         if (drawable_.getEnabled()) {
             auto& drawable = static_cast<Drawable&>(drawable_);
-            drawable.upload(uploadPass);
+            drawable.upload(uploadPass, parameters);
         }
     });
 }
 
 void LayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
-    if (!enabled || !getDrawableCount() || !parameters.renderPass) {
+    if (!enabled || !getDrawableCount() || !parameters.getRenderPass()) {
         return;
     }
 
 #if !defined(NDEBUG)
-    const auto debugGroup = parameters.encoder->createDebugGroup(getName() + "-render");
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex,
+                                                                      getName() + "-render");
 #endif
 
-    auto& renderPass = static_cast<RenderPass&>(*parameters.renderPass);
+    auto& renderPass = static_cast<RenderPass&>(*parameters.getRenderPass());
     auto& encoder = renderPass.getEncoder();
 
     bool bindUBOs = false;
@@ -58,7 +59,7 @@ void LayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
         }
 
         if (!bindUBOs) {
-            uniformBuffers.bindDescriptorSets(encoder);
+            uniformBuffers.bindDescriptorSets(encoder, parameters.renderThreadIndex);
             bindUBOs = true;
         }
 

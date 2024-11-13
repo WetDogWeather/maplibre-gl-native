@@ -7,15 +7,18 @@
 #include <mbgl/gfx/color_mode.hpp>
 #include <mbgl/gfx/texture2d.hpp>
 #include <mbgl/gfx/context.hpp>
-#include <mbgl/util/noncopyable.hpp>
 #include <mbgl/util/containers.hpp>
+#include <mbgl/util/noncopyable.hpp>
+#include <mbgl/util/std.hpp>
 #include <mbgl/vulkan/uniform_buffer.hpp>
 #include <mbgl/vulkan/renderer_backend.hpp>
 #include <mbgl/vulkan/pipeline.hpp>
 #include <mbgl/vulkan/descriptor_set.hpp>
 
+#include <map>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <unordered_map>
 #include <vector>
 
@@ -52,6 +55,9 @@ public:
     Context& operator=(const Context& other) = delete;
 
     RendererBackend& getBackend() const { return backend; }
+
+    auto getRenderThreadCount() const { return renderThreadCount; }
+    std::size_t getThreadIndex(std::int32_t layerIndex, std::int32_t maxLayerIndex) const;
 
     void beginFrame() override;
     void endFrame() override;
@@ -124,12 +130,13 @@ public:
     gfx::UniformBufferArray& mutableGlobalUniformBuffers() override { return globalUniformBuffers; };
 
     /// Bind the global uniform buffers
-    void bindGlobalUniformBuffers(gfx::RenderPass&) const noexcept override;
+    void bindGlobalUniformBuffers(gfx::RenderPass&, std::optional<std::size_t> threadIndex) override;
 
     /// Unbind the global uniform buffers
-    void unbindGlobalUniformBuffers(gfx::RenderPass&) const noexcept override {}
+    void unbindGlobalUniformBuffers(gfx::RenderPass&, std::optional<std::size_t>) override {}
 
-    bool renderTileClippingMasks(gfx::RenderPass& renderPass,
+    bool renderTileClippingMasks(std::optional<std::size_t> threadIndex,
+                                 gfx::RenderPass& renderPass,
                                  RenderStaticData& staticData,
                                  const std::vector<shaders::ClipUBO>& tileUBOs);
 
@@ -138,19 +145,53 @@ public:
     const std::unique_ptr<Texture2D>& getDummyTexture();
 
     const vk::DescriptorSetLayout& getDescriptorSetLayout(DescriptorSetType type);
-    DescriptorPoolGrowable& getDescriptorPool(DescriptorSetType type);
     const vk::UniquePipelineLayout& getGeneralPipelineLayout();
     const vk::UniquePipelineLayout& getPushConstantPipelineLayout();
+
+    DescriptorPoolGrowable& getDescriptorPool(DescriptorSetType, std::optional<std::size_t> threadIndex);
 
     uint8_t getCurrentFrameResourceIndex() const { return frameResourceIndex; }
     void enqueueDeletion(std::function<void(Context&)>&& function);
     void submitOneTimeCommand(const std::function<void(const vk::UniqueCommandBuffer&)>& function) const;
 
+    const vk::UniqueCommandBuffer& getPrimaryCommandBuffer() const {
+        return frameResources[frameResourceIndex].primaryCommandBuffer;
+    }
+    const vk::UniqueCommandBuffer& getUploadCommandBuffer() const {
+        return frameResources[frameResourceIndex].uploadCommandBuffer;
+    }
+    const vk::UniqueCommandBuffer& getSecondaryCommandBuffer(std::size_t threadIndex);
+
+    const vk::UniqueCommandBuffer& getCommandBuffer(std::optional<std::size_t> threadIndex) {
+        if (!renderThreadCount) {
+            return frameResources[frameResourceIndex].primaryCommandBuffer;
+        } else if (!threadIndex) {
+            return frameResources[frameResourceIndex].uploadCommandBuffer;
+        }
+        return getSecondaryCommandBuffer(*threadIndex);
+    }
+
+    void endEncoding();
+
     void requestSurfaceUpdate() { surfaceUpdateRequested = true; }
 
 private:
+    template <typename Func>
+        requires requires(Func f, std::size_t threadIndex) {
+            { f(threadIndex) } -> std::same_as<void>;
+        }
+    void eachRenderThread(Func f) {
+        for (auto i = 0_uz; i < renderThreadCount; ++i) {
+            f(i);
+        }
+    }
+
     struct FrameResources {
-        vk::UniqueCommandBuffer commandBuffer;
+        vk::UniqueCommandBuffer primaryCommandBuffer;
+        vk::UniqueCommandBuffer uploadCommandBuffer;
+
+        std::vector<vk::UniqueCommandBuffer> secondaryCommandBuffers;
+        std::vector<bool> secondaryCommandBufferBegin;
 
         vk::UniqueSemaphore surfaceSemaphore;
         vk::UniqueSemaphore frameSemaphore;
@@ -158,11 +199,16 @@ private:
 
         std::vector<std::function<void(Context&)>> deletionQueue;
 
-        FrameResources(vk::UniqueCommandBuffer& cb,
-                       vk::UniqueSemaphore&& surf,
-                       vk::UniqueSemaphore&& frame,
-                       vk::UniqueFence&& flight)
-            : commandBuffer(std::move(cb)),
+        explicit FrameResources(std::size_t threadCount,
+                                vk::UniqueCommandBuffer& pcb,
+                                vk::UniqueCommandBuffer& ucb,
+                                vk::UniqueSemaphore&& surf,
+                                vk::UniqueSemaphore&& frame,
+                                vk::UniqueFence&& flight)
+            : primaryCommandBuffer(std::move(pcb)),
+              uploadCommandBuffer(std::move(ucb)),
+              secondaryCommandBuffers(threadCount),
+              secondaryCommandBufferBegin(threadCount),
               surfaceSemaphore(std::move(surf)),
               frameSemaphore(std::move(frame)),
               flightFrameFence(std::move(flight)) {}
@@ -180,9 +226,12 @@ private:
 
 private:
     RendererBackend& backend;
+    const std::size_t renderThreadCount;
 
     vulkan::UniformBufferArray globalUniformBuffers;
-    std::unordered_map<DescriptorSetType, DescriptorPoolGrowable> descriptorPoolMap;
+
+    using DescriptorPoolMap = std::unordered_map<DescriptorSetType, DescriptorPoolGrowable>;
+    std::vector<DescriptorPoolMap> descriptorPoolMaps;
 
     std::unique_ptr<BufferResource> dummyVertexBuffer;
     std::unique_ptr<BufferResource> dummyUniformBuffer;
@@ -206,6 +255,7 @@ private:
 
         PipelineInfo pipelineInfo;
     } clipping;
+    MLN_TRACE_LOCKABLE(std::recursive_mutex, clippingMutex);
 };
 
 } // namespace vulkan

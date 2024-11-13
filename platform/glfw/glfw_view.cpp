@@ -212,9 +212,11 @@ GLFWView::GLFWView(bool fullscreen_,
     glfwSetWindowRefreshCallback(window, onWindowRefresh);
 #endif
 
+#if defined(MLN_RENDER_BACKEND_OPENGL)
     // "... applications will typically want to set the swap interval to one"
     // https://www.glfw.org/docs/latest/quick.html#quick_swap_buffers
     glfwSwapInterval(1);
+#endif
 
     glfwGetWindowSize(window, &width, &height);
 

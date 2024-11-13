@@ -7,9 +7,10 @@
 #include <mbgl/util/logging.hpp>
 
 #include <functional>
+#include <latch>
 #include <memory>
-#include <string>
 #include <set>
+#include <string>
 #include <vector>
 
 namespace mbgl {
@@ -89,7 +90,7 @@ public:
     /// Called before starting each frame
     virtual void preRender(RenderOrchestrator&, PaintParameters&) {}
     /// Called during the upload pass
-    virtual void upload(gfx::UploadPass&) {}
+    virtual void upload(gfx::UploadPass&, PaintParameters&) {}
     /// Called during each render pass
     virtual void render(RenderOrchestrator&, PaintParameters&) {}
     /// Called at the end of each frame

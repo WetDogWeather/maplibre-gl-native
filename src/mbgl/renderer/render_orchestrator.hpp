@@ -16,9 +16,11 @@
 #include <mbgl/renderer/image_manager_observer.hpp>
 #include <mbgl/text/placement.hpp>
 #include <mbgl/renderer/render_tree.hpp>
+#include <mbgl/util/std.hpp>
 
 #include <map>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -58,6 +60,7 @@ class RenderOrchestrator final : public GlyphManagerObserver, public ImageManage
 public:
     RenderOrchestrator(bool backgroundLayerAsColor_,
                        TaggedScheduler& threadPool_,
+                       Scheduler* renderThreadPool_,
                        const std::optional<std::string>& localFontFamily_);
     ~RenderOrchestrator() override;
 
@@ -108,22 +111,79 @@ public:
     size_t numLayerGroups() const noexcept;
     void updateLayerIndex(LayerGroupBasePtr, int32_t newIndex);
 
-    template <typename Func /* void(LayerGroupBase&) */>
-    void visitLayerGroups(Func f) {
-        for (auto& pair : layerGroupsByLayerIndex) {
-            if (pair.second) {
-                f(*pair.second);
-            }
+    template <typename Func>
+        requires requires(Func f, LayerGroupBase& layerGroup, std::size_t layerIndex) {
+            { f(layerGroup, layerIndex) } -> std::same_as<void>;
         }
+    void visitLayerGroups(bool reversed, Func f) {
+        eachGroup(reversed, [&, i = 0_uz](auto& group) mutable { f(group, i++); });
     }
 
-    template <typename Func /* void(LayerGroupBase&) */>
+    template <typename Func>
+    void visitLayerGroups(Func f) {
+        visitLayerGroups(/*reversed=*/false, f);
+    }
+
+    template <typename Func>
     void visitLayerGroupsReversed(Func f) {
-        for (auto rit = layerGroupsByLayerIndex.rbegin(); rit != layerGroupsByLayerIndex.rend(); ++rit) {
-            if (rit->second) {
-                f(*rit->second);
-            }
+        visitLayerGroups(/*reversed=*/true, f);
+    }
+
+    /// @brief Run a function for each layer, using multiple threads
+    /// @param scheduler The scheduler on which to schedule tasks
+    /// @param reversed True to run the tasks in order of decreasing layer index
+    /// @param f The function to execute
+    ///
+    /// The layer index passed to the given function is sequential, not the index
+    /// used as a sort key internally, and does not match `getLayerIndex()`.
+    ///
+    /// Each I of N threads handles the Ith 1/N of the items (as opposed to I%N) so that when the results
+    /// are concatenated, all the encoded commands appear in the same order as the layer indexes.
+    template <typename Func>
+        requires requires(Func f,
+                          LayerGroupBase& layerGroup,
+                          std::optional<std::size_t> threadIndex,
+                          std::size_t layerIndex) {
+            { f(layerGroup, threadIndex, layerIndex) } -> std::same_as<void>;
         }
+    void visitLayerGroups(Scheduler* scheduler, bool reversed, Func f) {
+        const auto layerCount = numLayerGroups();
+        if (!layerCount) {
+            return;
+        }
+        if (!scheduler) {
+            const std::optional<std::size_t> threadIndex{};
+            if (reversed) {
+                visitLayerGroupsReversed([&](auto& group, auto layerIndex) { f(group, threadIndex, layerIndex); });
+            } else {
+                visitLayerGroups([&](auto& group, auto layerIndex) { f(group, threadIndex, layerIndex); });
+            }
+            return;
+        }
+
+        // We use sequential indexes, not the sort key used in the group map, so put everything in a vector
+        std::vector<std::reference_wrapper<LayerGroupBase>> groups;
+        groups.reserve(layerCount);
+        eachGroup(reversed, [&](auto& group) { groups.push_back(group); });
+        assert(groups.size() == layerCount);
+
+        // Submit one task to each available thread, running the function
+        // on the corresponding items in each group in the specified order.
+        const auto threadCount = scheduler->getThreadCount();
+        scheduler->eachThread([&, threadCount, layerCount, reversed](const auto threadIndex) {
+            if (threadIndex) {
+                const auto minIndex = *threadIndex * layerCount / threadCount;
+                const auto maxIndex = (*threadIndex + 1) * layerCount / threadCount;
+                for (auto i = minIndex; i != maxIndex; ++i) {
+                    f(groups[i].get(), threadIndex, reversed ? layerCount - i - 1 : i);
+                }
+            }
+        });
+    }
+
+    template <typename Func>
+    void visitLayerGroups(Scheduler* scheduler, Func f) {
+        visitLayerGroups(scheduler, /*reversed=*/false, f);
     }
 
     void updateLayers(gfx::ShaderRegistry&,
@@ -192,6 +252,23 @@ private:
 #if MLN_DRAWABLE_RENDERER
     /// Move changes into the pending set, clearing the provided collection
     void addChanges(UniqueChangeRequestVec&);
+
+    template <typename Func>
+        requires requires(Func f, LayerGroupBase& layerGroup) {
+            { f(layerGroup) } -> std::same_as<void>;
+        }
+    void eachGroup(bool reversed, Func f) {
+        using namespace std::ranges;
+        auto wrap = [&](auto& pair) {
+            assert(pair.second);
+            f(*pair.second);
+        };
+        if (reversed) {
+            for_each(layerGroupsByLayerIndex | std::views::reverse, std::move(wrap));
+        } else {
+            for_each(layerGroupsByLayerIndex, std::move(wrap));
+        }
+    }
 #endif
 
     RendererObserver* observer;
@@ -227,6 +304,7 @@ private:
     RenderLayerReferences layersNeedPlacement;
 
     TaggedScheduler threadPool;
+    Scheduler* renderThreadPool;
 
 #if MLN_DRAWABLE_RENDERER
     std::vector<std::unique_ptr<ChangeRequest>> pendingChanges;

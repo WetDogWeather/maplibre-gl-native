@@ -149,7 +149,7 @@ void LineLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
     }
     auto& layerUniforms = layerGroup.mutableUniformBuffers();
 
-    layerUniforms.set(idLineEvaluatedPropsUBO, evaluatedPropsUniformBuffer);
+    layerUniforms.set(idLineEvaluatedPropsUBO, evaluatedPropsUniformBuffer, parameters.renderThreadIndex);
 
 #if MLN_RENDER_BACKEND_METAL
     // GPU Expressions
@@ -191,7 +191,7 @@ void LineLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     0,
                     0,
                     0};
-                drawableUniforms.createOrUpdate(idLineDrawableUBO, &drawableUBO, context);
+                drawableUniforms.createOrUpdate(idLineDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
 
                 const auto lineInterpolationUBO = LineInterpolationUBO{
                     /*color_t =*/std::get<0>(binders->get<LineColor>()->interpolationFactor(zoom)),
@@ -202,7 +202,8 @@ void LineLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     /*width_t =*/std::get<0>(binders->get<LineWidth>()->interpolationFactor(zoom)),
                     0,
                     0};
-                drawableUniforms.createOrUpdate(idLineInterpolationUBO, &lineInterpolationUBO, context);
+                drawableUniforms.createOrUpdate(
+                    idLineInterpolationUBO, &lineInterpolationUBO, context, parameters.renderThreadIndex);
             } break;
 
             case LineType::Gradient: {
@@ -212,7 +213,7 @@ void LineLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     0,
                     0,
                     0};
-                drawableUniforms.createOrUpdate(idLineDrawableUBO, &drawableUBO, context);
+                drawableUniforms.createOrUpdate(idLineDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
 
                 const auto lineGradientInterpolationUBO = LineGradientInterpolationUBO{
                     /*blur_t =*/std::get<0>(binders->get<LineBlur>()->interpolationFactor(zoom)),
@@ -223,7 +224,8 @@ void LineLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     0,
                     0,
                     0};
-                drawableUniforms.createOrUpdate(idLineInterpolationUBO, &lineGradientInterpolationUBO, context);
+                drawableUniforms.createOrUpdate(
+                    idLineInterpolationUBO, &lineGradientInterpolationUBO, context, parameters.renderThreadIndex);
             } break;
 
             case LineType::Pattern: {
@@ -241,7 +243,7 @@ void LineLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     /*texsize =*/{static_cast<float>(textureSize.width), static_cast<float>(textureSize.height)},
                     /*ratio =*/1.0f / tileID.pixelsToTileUnits(1.0f, static_cast<float>(zoom)),
                     /*fade =*/crossfade.t};
-                drawableUniforms.createOrUpdate(idLineDrawableUBO, &drawableUBO, context);
+                drawableUniforms.createOrUpdate(idLineDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
 
                 const auto linePatternInterpolationUBO = LinePatternInterpolationUBO{
                     /*blur_t =*/std::get<0>(binders->get<LineBlur>()->interpolationFactor(zoom)),
@@ -252,12 +254,14 @@ void LineLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     /*pattern_from_t =*/std::get<0>(binders->get<LinePattern>()->interpolationFactor(zoom)),
                     /*pattern_to_t =*/std::get<1>(binders->get<LinePattern>()->interpolationFactor(zoom)),
                     0};
-                drawableUniforms.createOrUpdate(idLineInterpolationUBO, &linePatternInterpolationUBO, context);
+                drawableUniforms.createOrUpdate(
+                    idLineInterpolationUBO, &linePatternInterpolationUBO, context, parameters.renderThreadIndex);
 
                 const auto linePatternTilePropertiesUBO = LinePatternTilePropertiesUBO{
                     /*pattern_from =*/patternPosA ? util::cast<float>(patternPosA->tlbr()) : std::array<float, 4>{0},
                     /*pattern_to =*/patternPosB ? util::cast<float>(patternPosB->tlbr()) : std::array<float, 4>{0}};
-                drawableUniforms.createOrUpdate(idLineTilePropertiesUBO, &linePatternTilePropertiesUBO, context);
+                drawableUniforms.createOrUpdate(
+                    idLineTilePropertiesUBO, &linePatternTilePropertiesUBO, context, parameters.renderThreadIndex);
             } break;
 
             case LineType::SDF: {
@@ -296,7 +300,8 @@ void LineLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                         0,
                         0,
                         0};
-                    drawableUniforms.createOrUpdate(idLineDrawableUBO, &drawableUBO, context);
+                    drawableUniforms.createOrUpdate(
+                        idLineDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
 
                     const auto lineSDFInterpolationUBO = LineSDFInterpolationUBO{
                         /*color_t =*/std::get<0>(binders->get<LineColor>()->interpolationFactor(zoom)),
@@ -308,7 +313,8 @@ void LineLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                         /*floorwidth_t =*/
                         std::get<0>(binders->get<LineFloorWidth>()->interpolationFactor(zoom)),
                         0};
-                    drawableUniforms.createOrUpdate(idLineInterpolationUBO, &lineSDFInterpolationUBO, context);
+                    drawableUniforms.createOrUpdate(
+                        idLineInterpolationUBO, &lineSDFInterpolationUBO, context, parameters.renderThreadIndex);
                 }
             } break;
 

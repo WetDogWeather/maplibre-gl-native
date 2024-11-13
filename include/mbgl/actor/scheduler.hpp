@@ -1,11 +1,16 @@
 #pragma once
 
 #include <mbgl/util/identity.hpp>
+#include <mbgl/util/instrumentation.hpp>
+#include <mbgl/util/logging.hpp>
+#include <mbgl/util/std.hpp>
 
 #include <mapbox/std/weak.hpp>
 
 #include <functional>
+#include <latch>
 #include <memory>
+#include <ranges>
 #include <type_traits>
 
 namespace mbgl {
@@ -38,9 +43,16 @@ class Scheduler {
 public:
     virtual ~Scheduler() = default;
 
+    virtual std::size_t getThreadCount() const noexcept { return 1; }
+
     /// Enqueues a function for execution.
     virtual void schedule(std::function<void()>&&) = 0;
     virtual void schedule(const util::SimpleIdentity, std::function<void()>&&) = 0;
+
+    /// Schedule a task assigned to the given owner `tag` on a specific thread.
+    virtual void schedule(std::optional<std::size_t>, const util::SimpleIdentity, std::function<void()>&&) {
+        throw std::logic_error("Not supported by this implementation");
+    }
 
     /// Makes a weak pointer to this Scheduler.
     virtual mapbox::base::WeakPtr<Scheduler> makeWeakPtr() = 0;
@@ -73,6 +85,36 @@ public:
         static_assert(std::is_invocable_v<TaskFn>);
         scheduleAndReplyValue(
             tag, std::forward<TaskFn>(task), std::forward<ReplyFn>(reply), GetCurrent()->makeWeakPtr());
+    }
+
+    /// Run the given function on each thread in the pool and wait until they are all complete
+    template <typename Func>
+        requires requires(Func f, std::optional<std::size_t> index) {
+            { f(index) } -> std::same_as<void>;
+        }
+    void eachThread(Func f, const util::SimpleIdentity tag = util::SimpleIdentity::Empty) {
+        MLN_TRACE_FUNC();
+        const auto threadCount = getThreadCount();
+        assert(threadCount <= std::latch::max());
+        std::latch latch(threadCount);
+        for (auto threadIndex = 0_uz; threadIndex < threadCount; ++threadIndex) {
+            schedule(threadIndex, tag, [&, threadIndex] {
+                MLN_TRACE_ZONE(task);
+                MLN_ZONE_VALUE(threadIndex);
+                try {
+                    f(std::optional<std::size_t>{threadIndex});
+                } catch (...) {
+                    latch.count_down();
+                    throw;
+                }
+                latch.count_down();
+            });
+        }
+        f(std::optional<std::size_t>{});
+        {
+            MLN_TRACE_ZONE(join);
+            latch.wait();
+        }
     }
 
     /// Wait until there's nothing pending or in process
@@ -135,6 +177,8 @@ public:
 
     /// @brief Get the wrapped scheduler
     const std::shared_ptr<Scheduler>& get() const noexcept { return scheduler; }
+
+    std::size_t getThreadCount() const noexcept { return scheduler->getThreadCount(); }
 
     void schedule(std::function<void()>&& fn) { scheduler->schedule(tag, std::move(fn)); }
     void runOnRenderThread(std::function<void()>&& fn) { scheduler->runOnRenderThread(tag, std::move(fn)); }

@@ -152,6 +152,7 @@ std::vector<const Layer*> Style::getLayers() const {
 
 Layer* Style::getLayer(const std::string& layerID) {
     MLN_TRACE_FUNC();
+    MLN_ZONE_STR(layerID);
 
     impl->mutated = true;
     return impl->getLayer(layerID);
@@ -159,6 +160,7 @@ Layer* Style::getLayer(const std::string& layerID) {
 
 const Layer* Style::getLayer(const std::string& layerID) const {
     MLN_TRACE_FUNC();
+    MLN_ZONE_STR(layerID);
 
     return impl->getLayer(layerID);
 }

@@ -2,6 +2,7 @@
 
 #include <mbgl/style/image_impl.hpp>
 #include <mbgl/util/immutable.hpp>
+#include <mbgl/util/instrumentation.hpp>
 
 #include <map>
 #include <mutex>
@@ -57,6 +58,7 @@ public:
     void clear();
 
 private:
+    void removeRequestorLocked(ImageRequestor&);
     void checkMissingAndNotify(ImageRequestor&, const ImageRequestPair&);
     void notify(ImageRequestor&, const ImageRequestPair&) const;
 
@@ -72,7 +74,10 @@ private:
 
     ImageManagerObserver* observer = nullptr;
 
-    mutable std::recursive_mutex rwLock;
+    MLN_TRACE_LOCKABLE(std::recursive_mutex, mutex);
+
+    // Trace macro doesn't support `mutable`
+    auto& getMutex() const { return const_cast<std::remove_const_t<decltype(mutex)>&>(mutex); }
 };
 
 class ImageRequestor {

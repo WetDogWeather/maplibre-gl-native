@@ -449,7 +449,7 @@ void RenderSymbolLayer::render(PaintParameters& parameters) {
         segments.match(
             [&](const SegmentWrapper& segment) {
                 programInstance.draw(parameters.context,
-                                     *parameters.renderPass,
+                                     *parameters.getRenderPass(),
                                      gfx::Triangles(),
                                      parameters.depthModeForSublayer(0, gfx::DepthMaskType::ReadOnly),
                                      gfx::StencilMode::disabled(),
@@ -464,7 +464,7 @@ void RenderSymbolLayer::render(PaintParameters& parameters) {
             },
             [&](const SegmentVectorWrapper& segmentVector) {
                 programInstance.draw(parameters.context,
-                                     *parameters.renderPass,
+                                     *parameters.getRenderPass(),
                                      gfx::Triangles(),
                                      parameters.depthModeForSublayer(0, gfx::DepthMaskType::ReadOnly),
                                      gfx::StencilMode::disabled(),
@@ -577,7 +577,7 @@ void RenderSymbolLayer::render(PaintParameters& parameters) {
                 const auto& collisionBox = isText ? bucket.textCollisionBox : bucket.iconCollisionBox;
                 programs.collisionBoxProgram->draw(
                     parameters.context,
-                    *parameters.renderPass,
+                    *parameters.getRenderPass(),
                     gfx::Lines{1.0f},
                     gfx::DepthMode::disabled(),
                     gfx::StencilMode::disabled(),
@@ -604,7 +604,7 @@ void RenderSymbolLayer::render(PaintParameters& parameters) {
                 const auto& collisionCircle = isText ? bucket.textCollisionCircle : bucket.iconCollisionCircle;
                 programs.collisionCircleProgram->draw(
                     parameters.context,
-                    *parameters.renderPass,
+                    *parameters.getRenderPass(),
                     gfx::Triangles(),
                     gfx::DepthMode::disabled(),
                     gfx::StencilMode::disabled(),

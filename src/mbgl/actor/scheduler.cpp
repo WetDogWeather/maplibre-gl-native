@@ -40,7 +40,7 @@ std::shared_ptr<Scheduler> Scheduler::GetBackground() {
     std::shared_ptr<Scheduler> scheduler = weak.lock();
 
     if (!scheduler) {
-        weak = scheduler = std::make_shared<ThreadPool>();
+        weak = scheduler = std::make_shared<ThreadPool>("Background");
     }
 
     return scheduler;
@@ -64,7 +64,7 @@ std::shared_ptr<Scheduler> Scheduler::GetSequenced() {
             if (lastUsedIndex == i) result = scheduler;
             continue;
         }
-        result = std::make_shared<SequencedScheduler>();
+        result = std::make_shared<SequencedScheduler>("Sequenced " + util::toString(i));
         weak = result;
         lastUsedIndex = i;
         break;

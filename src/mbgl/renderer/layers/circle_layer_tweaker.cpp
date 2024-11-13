@@ -32,7 +32,7 @@ void CircleLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParamete
 
 #if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(label.c_str());
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex, label);
 #endif
 
     const auto zoom = static_cast<float>(parameters.state.getZoom());
@@ -56,7 +56,7 @@ void CircleLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParamete
         propertiesUpdated = false;
     }
     auto& layerUniforms = layerGroup.mutableUniformBuffers();
-    layerUniforms.set(idCircleEvaluatedPropsUBO, evaluatedPropsUniformBuffer);
+    layerUniforms.set(idCircleEvaluatedPropsUBO, evaluatedPropsUniformBuffer, parameters.renderThreadIndex);
 
     visitLayerGroupDrawables(layerGroup, [&](gfx::Drawable& drawable) {
         assert(drawable.getTileID() || !"Circles only render with tiles");
@@ -88,7 +88,7 @@ void CircleLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParamete
                                                /* .padding = */ 0};
 
         auto& drawableUniforms = drawable.mutableUniformBuffers();
-        drawableUniforms.createOrUpdate(idCircleDrawableUBO, &drawableUBO, context);
+        drawableUniforms.createOrUpdate(idCircleDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
 
         const CircleInterpolateUBO interpolateUBO = {
             /* .color_t = */ std::get<0>(binders->get<CircleColor>()->interpolationFactor(zoom)),
@@ -102,7 +102,7 @@ void CircleLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParamete
             /* .stroke_opacity_t = */
             std::get<0>(binders->get<CircleStrokeOpacity>()->interpolationFactor(zoom)),
             /* .padding = */ 0};
-        drawableUniforms.createOrUpdate(idCircleInterpolateUBO, &interpolateUBO, context);
+        drawableUniforms.createOrUpdate(idCircleInterpolateUBO, &interpolateUBO, context, parameters.renderThreadIndex);
     });
 }
 

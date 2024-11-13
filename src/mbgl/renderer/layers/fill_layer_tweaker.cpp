@@ -34,7 +34,7 @@ void FillLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
 
 #if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(label.c_str());
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex, label);
 #endif
 
     if (!evaluatedPropsUniformBuffer || propertiesUpdated) {
@@ -50,7 +50,7 @@ void FillLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
         propertiesUpdated = false;
     }
     auto& layerUniforms = layerGroup.mutableUniformBuffers();
-    layerUniforms.set(idFillEvaluatedPropsUBO, evaluatedPropsUniformBuffer);
+    layerUniforms.set(idFillEvaluatedPropsUBO, evaluatedPropsUniformBuffer, parameters.renderThreadIndex);
 
     const auto& translation = evaluated.get<FillTranslate>();
     const auto anchor = evaluated.get<FillTranslateAnchor>();
@@ -100,7 +100,7 @@ void FillLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
         switch (static_cast<RenderFillLayer::FillVariant>(drawable.getType())) {
             case RenderFillLayer::FillVariant::Fill: {
                 const FillDrawableUBO drawableUBO = {/*.matrix=*/util::cast<float>(matrix)};
-                drawableUniforms.createOrUpdate(idFillDrawableUBO, &drawableUBO, context);
+                drawableUniforms.createOrUpdate(idFillDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
 
                 const auto fillInterpolateUBO = FillInterpolateUBO{
                     /* .color_t = */ std::get<0>(binders->get<FillColor>()->interpolationFactor(zoom)),
@@ -108,12 +108,13 @@ void FillLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     0,
                     0,
                 };
-                drawableUniforms.createOrUpdate(idFillInterpolateUBO, &fillInterpolateUBO, context);
+                drawableUniforms.createOrUpdate(
+                    idFillInterpolateUBO, &fillInterpolateUBO, context, parameters.renderThreadIndex);
                 break;
             }
             case RenderFillLayer::FillVariant::FillOutline: {
                 const FillOutlineDrawableUBO drawableUBO = {/*.matrix=*/util::cast<float>(matrix)};
-                drawableUniforms.createOrUpdate(idFillDrawableUBO, &drawableUBO, context);
+                drawableUniforms.createOrUpdate(idFillDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
 
                 const auto fillOutlineInterpolateUBO = FillOutlineInterpolateUBO{
                     /* .color_t = */ std::get<0>(binders->get<FillOutlineColor>()->interpolationFactor(zoom)),
@@ -121,7 +122,8 @@ void FillLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     0,
                     0,
                 };
-                drawableUniforms.createOrUpdate(idFillInterpolateUBO, &fillOutlineInterpolateUBO, context);
+                drawableUniforms.createOrUpdate(
+                    idFillInterpolateUBO, &fillOutlineInterpolateUBO, context, parameters.renderThreadIndex);
                 break;
             }
             case RenderFillLayer::FillVariant::FillPattern: {
@@ -133,7 +135,7 @@ void FillLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     /*.tile_ratio = */ tileRatio,
                     0,
                 };
-                drawableUniforms.createOrUpdate(idFillDrawableUBO, &drawableUBO, context);
+                drawableUniforms.createOrUpdate(idFillDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
 
                 const auto fillPatternInterpolateUBO = FillPatternInterpolateUBO{
                     /* .pattern_from_t = */ std::get<0>(binders->get<FillPattern>()->interpolationFactor(zoom)),
@@ -141,13 +143,15 @@ void FillLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     /* .opacity_t = */ std::get<0>(binders->get<FillOpacity>()->interpolationFactor(zoom)),
                     0,
                 };
-                drawableUniforms.createOrUpdate(idFillInterpolateUBO, &fillPatternInterpolateUBO, context);
+                drawableUniforms.createOrUpdate(
+                    idFillInterpolateUBO, &fillPatternInterpolateUBO, context, parameters.renderThreadIndex);
 
                 const auto fillPatternTilePropsUBO = FillPatternTilePropsUBO{
                     /* pattern_from = */ patternPosA ? util::cast<float>(patternPosA->tlbr()) : std::array<float, 4>{0},
                     /* pattern_to = */ patternPosB ? util::cast<float>(patternPosB->tlbr()) : std::array<float, 4>{0},
                 };
-                drawableUniforms.createOrUpdate(idFillTilePropsUBO, &fillPatternTilePropsUBO, context);
+                drawableUniforms.createOrUpdate(
+                    idFillTilePropsUBO, &fillPatternTilePropsUBO, context, parameters.renderThreadIndex);
                 break;
             }
             case RenderFillLayer::FillVariant::FillOutlinePattern: {
@@ -158,7 +162,7 @@ void FillLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     /*.texsize=*/{static_cast<float>(textureSize.width), static_cast<float>(textureSize.height)},
                     /*.tile_ratio = */ tileRatio,
                     0};
-                drawableUniforms.createOrUpdate(idFillDrawableUBO, &drawableUBO, context);
+                drawableUniforms.createOrUpdate(idFillDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
 
                 const auto fillOutlinePatternInterpolateUBO = FillPatternInterpolateUBO{
                     /* .pattern_from_t = */ std::get<0>(binders->get<FillPattern>()->interpolationFactor(zoom)),
@@ -166,13 +170,15 @@ void FillLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     /* .opacity_t = */ std::get<0>(binders->get<FillOpacity>()->interpolationFactor(zoom)),
                     0,
                 };
-                drawableUniforms.createOrUpdate(idFillInterpolateUBO, &fillOutlinePatternInterpolateUBO, context);
+                drawableUniforms.createOrUpdate(
+                    idFillInterpolateUBO, &fillOutlinePatternInterpolateUBO, context, parameters.renderThreadIndex);
 
                 const auto fillOutlinePatternTilePropsUBO = FillOutlinePatternTilePropsUBO{
                     /* pattern_from = */ patternPosA ? util::cast<float>(patternPosA->tlbr()) : std::array<float, 4>{0},
                     /* pattern_to = */ patternPosB ? util::cast<float>(patternPosB->tlbr()) : std::array<float, 4>{0},
                 };
-                drawableUniforms.createOrUpdate(idFillTilePropsUBO, &fillOutlinePatternTilePropsUBO, context);
+                drawableUniforms.createOrUpdate(
+                    idFillTilePropsUBO, &fillOutlinePatternTilePropsUBO, context, parameters.renderThreadIndex);
                 break;
             }
             case RenderFillLayer::FillVariant::FillOutlineTriangulated: {
@@ -182,7 +188,7 @@ void FillLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters
                     0,
                     0,
                     0};
-                drawableUniforms.createOrUpdate(idFillDrawableUBO, &drawableUBO, context);
+                drawableUniforms.createOrUpdate(idFillDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
                 break;
             }
             default: {

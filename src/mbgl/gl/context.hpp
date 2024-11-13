@@ -111,7 +111,7 @@ public:
     bool empty(bool considerPool = false) const {
         return abandonedPrograms.empty() && abandonedShaders.empty() && abandonedBuffers.empty() &&
                abandonedTextures.empty() && abandonedVertexArrays.empty() && abandonedFramebuffers.empty() &&
-               (considerPool ? texturePool->empty() : true);
+               (!considerPool || texturePool->empty());
     }
 
     extension::Debugging* getDebuggingExtension() const { return debugging.get(); }
@@ -150,10 +150,10 @@ public:
     gfx::UniformBufferArray& mutableGlobalUniformBuffers() override { return globalUniformBuffers; };
 
     /// Bind the global uniform buffers
-    void bindGlobalUniformBuffers(gfx::RenderPass&) const noexcept override;
+    void bindGlobalUniformBuffers(gfx::RenderPass&, std::optional<std::size_t> threadIndex) noexcept override;
 
     /// Unbind the global uniform buffers
-    void unbindGlobalUniformBuffers(gfx::RenderPass&) const noexcept override;
+    void unbindGlobalUniformBuffers(gfx::RenderPass&, std::optional<std::size_t> threadIndex) noexcept override;
 #endif
 
     void setDirtyState() override;

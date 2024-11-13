@@ -54,9 +54,11 @@ public:
     const void* contents() const noexcept { return (raw.empty() ? nullptr : raw.data()); }
 
     Context& getContext() const noexcept { return context; }
-    const vk::Buffer& getVulkanBuffer() const noexcept { return bufferAllocation->buffer; }
+    const vk::Buffer& getVulkanBuffer() const noexcept {
+        assert(bufferAllocation);
+        return bufferAllocation->buffer;
+    }
     std::size_t getVulkanBufferOffset() const noexcept;
-    std::size_t getVulkanBufferSize() const noexcept;
 
     bool isValid() const noexcept { return !raw.empty(); }
     operator bool() const noexcept { return isValid(); }

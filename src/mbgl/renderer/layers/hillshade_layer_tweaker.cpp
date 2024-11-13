@@ -40,7 +40,7 @@ void HillshadeLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParam
 
 #if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(label.c_str());
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex, label);
 #endif
 
     if (!evaluatedPropsUniformBuffer || propertiesUpdated) {
@@ -52,7 +52,7 @@ void HillshadeLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParam
         propertiesUpdated = false;
     }
     auto& layerUniforms = layerGroup.mutableUniformBuffers();
-    layerUniforms.set(idHillshadeEvaluatedPropsUBO, evaluatedPropsUniformBuffer);
+    layerUniforms.set(idHillshadeEvaluatedPropsUBO, evaluatedPropsUniformBuffer, parameters.renderThreadIndex);
 
     visitLayerGroupDrawables(layerGroup, [&](gfx::Drawable& drawable) {
         if (!drawable.getTileID() || !checkTweakDrawable(drawable)) {
@@ -67,7 +67,8 @@ void HillshadeLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParam
                                             /* .latrange = */ getLatRange(tileID),
                                             /* .light = */ getLight(parameters, evaluated)};
         auto& drawableUniforms = drawable.mutableUniformBuffers();
-        drawableUniforms.createOrUpdate(idHillshadeDrawableUBO, &drawableUBO, parameters.context);
+        drawableUniforms.createOrUpdate(
+            idHillshadeDrawableUBO, &drawableUBO, parameters.context, parameters.renderThreadIndex);
     });
 }
 

@@ -37,7 +37,7 @@ void FillExtrusionLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintP
 
 #if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(label.c_str());
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex, label);
 #endif
 
     // UBO depends on more than just evaluated properties, so we need to update every time,
@@ -57,7 +57,7 @@ void FillExtrusionLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintP
         /* .to_scale = */ crossfade.toScale,
         /* .pad = */ 0};
     auto& layerUniforms = layerGroup.mutableUniformBuffers();
-    layerUniforms.createOrUpdate(idFillExtrusionPropsUBO, &propsUBO, context);
+    layerUniforms.createOrUpdate(idFillExtrusionPropsUBO, &propsUBO, context, parameters.renderThreadIndex);
 
     propertiesUpdated = false;
 
@@ -131,9 +131,12 @@ void FillExtrusionLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintP
         };
 
         auto& drawableUniforms = drawable.mutableUniformBuffers();
-        drawableUniforms.createOrUpdate(idFillExtrusionDrawableUBO, &drawableUBO, context);
-        drawableUniforms.createOrUpdate(idFillExtrusionTilePropsUBO, &tilePropsUBO, context);
-        drawableUniforms.createOrUpdate(idFillExtrusionInterpolateUBO, &interpUBO, context);
+        drawableUniforms.createOrUpdate(
+            idFillExtrusionDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
+        drawableUniforms.createOrUpdate(
+            idFillExtrusionTilePropsUBO, &tilePropsUBO, context, parameters.renderThreadIndex);
+        drawableUniforms.createOrUpdate(
+            idFillExtrusionInterpolateUBO, &interpUBO, context, parameters.renderThreadIndex);
     });
 }
 

@@ -28,15 +28,9 @@ protected:
 class UniformBufferArray final : public gfx::UniformBufferArray {
 public:
     UniformBufferArray() = delete;
-    UniformBufferArray(DescriptorSetType descriptorSetType_,
-                       uint32_t descriptorStartIndex_,
-                       uint32_t descriptorBindingCount_)
-        : descriptorSetType(descriptorSetType_),
-          descriptorStartIndex(descriptorStartIndex_),
-          descriptorBindingCount(descriptorBindingCount_) {}
+    UniformBufferArray(DescriptorSetType, uint32_t descriptorStartIndex, uint32_t descriptorBindingCount);
 
-    UniformBufferArray(UniformBufferArray&& other)
-        : gfx::UniformBufferArray(std::move(other)) {}
+    UniformBufferArray(UniformBufferArray&&);
     UniformBufferArray(const UniformBufferArray&) = delete;
 
     UniformBufferArray& operator=(UniformBufferArray&& other) {
@@ -50,13 +44,20 @@ public:
 
     ~UniformBufferArray() = default;
 
+    void init(gfx::Context&, std::size_t threadCount);
+
     const std::shared_ptr<gfx::UniformBuffer>& set(const size_t id,
-                                                   std::shared_ptr<gfx::UniformBuffer> uniformBuffer) override;
+                                                   std::shared_ptr<gfx::UniformBuffer> uniformBuffer,
+                                                   std::optional<std::size_t> threadIndex) override;
 
-    void createOrUpdate(
-        const size_t id, const void* data, std::size_t size, gfx::Context& context, bool persistent = false) override;
+    void createOrUpdate(const size_t id,
+                        const void* data,
+                        std::size_t size,
+                        gfx::Context& context,
+                        std::optional<std::size_t> threadIndex,
+                        bool persistent) override;
 
-    void bindDescriptorSets(CommandEncoder& encoder);
+    void bindDescriptorSets(CommandEncoder& encoder, std::optional<std::size_t> threadIndex);
     void freeDescriptorSets() { descriptorSet.reset(); }
 
 private:

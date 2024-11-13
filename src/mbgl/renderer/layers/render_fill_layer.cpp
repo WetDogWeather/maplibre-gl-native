@@ -147,7 +147,7 @@ void RenderFillLayer::render(PaintParameters& parameters) {
                 checkRenderability(parameters, programInstance.activeBindingCount(allAttributeBindings));
 
                 programInstance.draw(parameters.context,
-                                     *parameters.renderPass,
+                                     *parameters.getRenderPass(),
                                      drawMode,
                                      depthMode,
                                      parameters.stencilModeForClipping(tile.id),
@@ -236,7 +236,7 @@ void RenderFillLayer::render(PaintParameters& parameters) {
                 checkRenderability(parameters, programInstance.activeBindingCount(allAttributeBindings));
 
                 programInstance.draw(parameters.context,
-                                     *parameters.renderPass,
+                                     *parameters.getRenderPass(),
                                      drawMode,
                                      depthMode,
                                      parameters.stencilModeForClipping(tile.id),

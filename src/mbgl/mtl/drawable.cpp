@@ -183,7 +183,7 @@ void Drawable::draw(PaintParameters& parameters) const {
     const auto& shaderMTL = static_cast<const ShaderProgram&>(*shader);
 
 #if !defined(NDEBUG)
-    const auto debugGroup = parameters.encoder->createDebugGroup(debugLabel(*this));
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(debugLabel(*this));
 #endif
 
     bindAttributes(renderPass);

@@ -36,7 +36,8 @@ ShaderProgram::ShaderProgram(shaders::BuiltIn shaderID,
                              gfx::ContextObserver& observer)
     : ShaderProgramBase(),
       shaderName(name),
-      backend(backend_) {
+      backend(backend_),
+      pipelines(backend.getRenderThreadCount() + 1) {
     std::string defineStr = programParameters.getDefinesString() + "\n\n";
     for (const auto& define : additionalDefines) {
         defineStr += "#define " + define.first + " " + define.second + "\n";
@@ -111,9 +112,12 @@ ShaderProgram::ShaderProgram(shaders::BuiltIn shaderID,
 
 ShaderProgram::~ShaderProgram() noexcept = default;
 
-const vk::UniquePipeline& ShaderProgram::getPipeline(const PipelineInfo& pipelineInfo) {
-    auto& pipeline = pipelines[pipelineInfo.hash()];
-    if (pipeline) return pipeline;
+const vk::UniquePipeline& ShaderProgram::getPipeline(const PipelineInfo& pipelineInfo,
+                                                     std::optional<std::size_t> threadIndex) {
+    auto& pipeline = pipelines[threadIndex ? *threadIndex + 1 : 0];
+    if (pipeline) {
+        return pipeline;
+    }
 
     const auto vertexInputState = vk::PipelineVertexInputStateCreateInfo()
                                       .setVertexBindingDescriptions(pipelineInfo.inputBindings)
@@ -189,7 +193,7 @@ const vk::UniquePipeline& ShaderProgram::getPipeline(const PipelineInfo& pipelin
     const vk::PipelineDynamicStateCreateInfo dynamicState({}, dynamicValues);
 
     const auto& device = backend.getDevice();
-    auto& context = static_cast<Context&>(backend.getContext());
+    auto& context = backend.getContext<Context>();
     const auto& pipelineLayout = pipelineInfo.usePushConstants ? context.getPushConstantPipelineLayout()
                                                                : context.getGeneralPipelineLayout();
 

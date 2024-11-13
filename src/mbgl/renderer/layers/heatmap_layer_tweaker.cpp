@@ -31,7 +31,7 @@ void HeatmapLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParamet
 
 #if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(label.c_str());
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex, label);
 #endif
 
     if (!evaluatedPropsUniformBuffer || propertiesUpdated) {
@@ -44,7 +44,7 @@ void HeatmapLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParamet
         propertiesUpdated = false;
     }
     auto& layerUniforms = layerGroup.mutableUniformBuffers();
-    layerUniforms.set(idHeatmapEvaluatedPropsUBO, evaluatedPropsUniformBuffer);
+    layerUniforms.set(idHeatmapEvaluatedPropsUBO, evaluatedPropsUniformBuffer, parameters.renderThreadIndex);
 
     visitLayerGroupDrawables(layerGroup, [&](gfx::Drawable& drawable) {
         if (!drawable.getTileID() || !checkTweakDrawable(drawable)) {
@@ -69,13 +69,14 @@ void HeatmapLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParamet
                                                 /* .padding = */ {0}};
 
         auto& drawableUniforms = drawable.mutableUniformBuffers();
-        drawableUniforms.createOrUpdate(idHeatmapDrawableUBO, &drawableUBO, context);
+        drawableUniforms.createOrUpdate(idHeatmapDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
 
         const HeatmapInterpolateUBO interpolateUBO = {
             /* .weight_t = */ std::get<0>(binders->get<HeatmapWeight>()->interpolationFactor(zoom)),
             /* .radius_t = */ std::get<0>(binders->get<HeatmapRadius>()->interpolationFactor(zoom)),
             /* .padding = */ {0}};
-        drawableUniforms.createOrUpdate(idHeatmapInterpolateUBO, &interpolateUBO, context);
+        drawableUniforms.createOrUpdate(
+            idHeatmapInterpolateUBO, &interpolateUBO, context, parameters.renderThreadIndex);
     });
 }
 

@@ -145,7 +145,7 @@ void RenderCircleLayer::render(PaintParameters& parameters) {
         checkRenderability(parameters, CircleProgram::activeBindingCount(allAttributeBindings));
 
         circleProgram->draw(parameters.context,
-                            *parameters.renderPass,
+                            *parameters.getRenderPass(),
                             gfx::Triangles(),
                             parameters.depthModeForSublayer(0, gfx::DepthMaskType::ReadOnly),
                             gfx::StencilMode::disabled(),

@@ -8,11 +8,13 @@
 namespace mbgl {
 namespace vulkan {
 
-RenderPass::RenderPass(CommandEncoder& commandEncoder_, const char* name, const gfx::RenderPassDescriptor& descriptor_)
+RenderPass::RenderPass(CommandEncoder& commandEncoder_,
+                       const char* name,
+                       const gfx::RenderPassDescriptor& descriptor_,
+                       Context& context)
     : descriptor(descriptor_),
       commandEncoder(commandEncoder_) {
     auto& resource = descriptor.renderable.getResource<RenderableResource>();
-
     resource.bind();
 
     std::array<vk::ClearValue, 2> clearValues;
@@ -28,24 +30,26 @@ RenderPass::RenderPass(CommandEncoder& commandEncoder_, const char* name, const 
                                          .setRenderArea({{0, 0}, resource.getExtent()})
                                          .setClearValues(clearValues);
 
-    pushDebugGroup(name);
+    pushDebugGroup(/*render thread*/ {}, name);
 
-    commandEncoder.getCommandBuffer()->beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
+    commandEncoder.getPrimaryCommandBuffer()->beginRenderPass(
+        renderPassBeginInfo,
+        context.getRenderThreadCount() ? vk::SubpassContents::eSecondaryCommandBuffers : vk::SubpassContents::eInline);
 
-    commandEncoder.context.performCleanup();
+    context.performCleanup();
 }
 
 RenderPass::~RenderPass() {
     endEncoding();
 
-    popDebugGroup();
+    popDebugGroup(/*render thread*/ {});
 }
 
 void RenderPass::endEncoding() {
-    commandEncoder.getCommandBuffer()->endRenderPass();
+    commandEncoder.endEncoding();
 }
 
-void RenderPass::clearStencil(uint32_t value) const {
+void RenderPass::clearStencil(std::optional<std::size_t> threadIndex, uint32_t value) const {
     const auto& resource = descriptor.renderable.getResource<RenderableResource>();
     const auto& extent = resource.getExtent();
 
@@ -56,19 +60,20 @@ void RenderPass::clearStencil(uint32_t value) const {
     const auto rect = vk::ClearRect().setBaseArrayLayer(0).setLayerCount(1).setRect(
         {{0, 0}, {extent.width, extent.height}});
 
-    commandEncoder.getCommandBuffer()->clearAttachments(attach, rect);
+    commandEncoder.getCommandBuffer(threadIndex)->clearAttachments(attach, rect);
 }
 
-void RenderPass::pushDebugGroup(const char* name) {
-    commandEncoder.pushDebugGroup(name);
+void RenderPass::pushDebugGroup(std::optional<std::size_t> threadIndex, const char* name) {
+    commandEncoder.pushDebugGroup(threadIndex, name);
 }
 
-void RenderPass::popDebugGroup() {
-    commandEncoder.popDebugGroup();
+void RenderPass::popDebugGroup(std::optional<std::size_t> threadIndex) {
+    commandEncoder.popDebugGroup(threadIndex);
 }
 
-void RenderPass::addDebugSignpost(const char* name) {
-    commandEncoder.getContext().getBackend().insertDebugLabel(commandEncoder.getCommandBuffer().get(), name);
+void RenderPass::addDebugSignpost(std::optional<std::size_t> threadIndex, const char* name) {
+    auto& buffer = commandEncoder.getCommandBuffer(threadIndex);
+    commandEncoder.getContext().getBackend().insertDebugLabel(buffer.get(), name);
 }
 
 } // namespace vulkan

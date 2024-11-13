@@ -19,13 +19,14 @@ class RenderPass;
 class TileLayerGroup : public mbgl::TileLayerGroup {
 public:
     TileLayerGroup(int32_t layerIndex, std::size_t initialCapacity, std::string name);
-    ~TileLayerGroup() override {}
 
-    void upload(gfx::UploadPass&) override;
+    void upload(gfx::UploadPass&, PaintParameters&) override;
     void render(RenderOrchestrator&, PaintParameters&) override;
 
     const gfx::UniformBufferArray& getUniformBuffers() const override { return uniformBuffers; };
     gfx::UniformBufferArray& mutableUniformBuffers() override { return uniformBuffers; };
+
+    void preRender(RenderOrchestrator&, PaintParameters&) override;
 
 protected:
     UniformBufferArray uniformBuffers;

@@ -18,14 +18,16 @@ class StencilMode;
 namespace vulkan {
 
 class CommandEncoder;
+class Context;
 class UploadPass;
 
 class Drawable : public gfx::Drawable {
 public:
-    Drawable(std::string name);
+    Drawable(std::string name_);
     ~Drawable() override;
 
-    void upload(gfx::UploadPass&);
+    void upload(gfx::UploadPass&, PaintParameters&);
+    void preDraw(PaintParameters&) override;
     void draw(PaintParameters&) const override;
 
     void setIndexData(gfx::IndexVectorBasePtr, std::vector<UniqueDrawSegment> segments) override;
@@ -54,8 +56,10 @@ public:
 protected:
     void buildVulkanInputBindings() noexcept;
 
-    bool bindAttributes(CommandEncoder&) const noexcept;
-    bool bindDescriptors(CommandEncoder&) const noexcept;
+    bool bindAttributes(CommandEncoder&, std::optional<std::size_t> threadIndex) const noexcept;
+    bool bindDescriptors(CommandEncoder&,
+                         std::size_t threadCount,
+                         std::optional<std::size_t> threadIndex) const noexcept;
 
     void uploadTextures(UploadPass&) const noexcept;
 

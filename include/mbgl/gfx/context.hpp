@@ -169,10 +169,10 @@ public:
     virtual gfx::UniformBufferArray& mutableGlobalUniformBuffers() = 0;
 
     /// Bind the global uniform buffers
-    virtual void bindGlobalUniformBuffers(gfx::RenderPass&) const noexcept = 0;
+    virtual void bindGlobalUniformBuffers(gfx::RenderPass&, std::optional<std::size_t> threadIndex) = 0;
 
     /// Unbind the global uniform buffers
-    virtual void unbindGlobalUniformBuffers(gfx::RenderPass&) const noexcept = 0;
+    virtual void unbindGlobalUniformBuffers(gfx::RenderPass&, std::optional<std::size_t> threadIndex) = 0;
 #endif
 
 protected:

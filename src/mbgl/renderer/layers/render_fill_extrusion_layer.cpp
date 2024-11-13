@@ -128,7 +128,7 @@ void RenderFillExtrusionLayer::render(PaintParameters& parameters) {
         checkRenderability(parameters, programInstance.activeBindingCount(allAttributeBindings));
 
         programInstance.draw(parameters.context,
-                             *parameters.renderPass,
+                             *parameters.getRenderPass(),
                              gfx::Triangles(),
                              depthMode,
                              stencilMode,

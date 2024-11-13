@@ -10,8 +10,8 @@ namespace vulkan {
  */
 class DrawableBuilder final : public gfx::DrawableBuilder {
 public:
-    DrawableBuilder(std::string name_)
-        : gfx::DrawableBuilder(std::move(name_)) {}
+    DrawableBuilder(std::string name)
+        : gfx::DrawableBuilder(std::move(name)) {}
     ~DrawableBuilder() override = default;
 
     using DrawSegment = gfx::Drawable::DrawSegment;

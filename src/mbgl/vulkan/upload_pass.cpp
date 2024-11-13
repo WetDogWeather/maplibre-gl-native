@@ -15,7 +15,7 @@ namespace vulkan {
 UploadPass::UploadPass(gfx::Renderable&, CommandEncoder& commandEncoder_, const char* name)
     : commandEncoder(commandEncoder_) {
     // Push the group for the name provided
-    debugGroups.emplace_back(gfx::DebugGroup<gfx::UploadPass>{*this, name});
+    debugGroups.push_back(gfx::DebugGroup<gfx::UploadPass>{*this, /*render thread*/ {}, name});
 }
 
 UploadPass::~UploadPass() {
@@ -124,6 +124,7 @@ gfx::AttributeBindingArray UploadPass::buildAttributeBindings(
     const gfx::BufferUsageType usage,
     const std::optional<std::chrono::duration<double>> lastUpdate,
     /*out*/ std::vector<std::unique_ptr<gfx::VertexBufferResource>>&) {
+    MLN_TRACE_FUNC();
     gfx::AttributeBindingArray bindings;
 
     // For each attribute in the program, with the corresponding default and optional override...
@@ -186,12 +187,12 @@ gfx::AttributeBindingArray UploadPass::buildAttributeBindings(
     return bindings;
 }
 
-void UploadPass::pushDebugGroup(const char* name) {
-    commandEncoder.pushDebugGroup(name);
+void UploadPass::pushDebugGroup(std::optional<std::size_t> threadIndex, const char* name) {
+    commandEncoder.pushDebugGroup(threadIndex, name);
 }
 
-void UploadPass::popDebugGroup() {
-    commandEncoder.popDebugGroup();
+void UploadPass::popDebugGroup(std::optional<std::size_t> threadIndex) {
+    commandEncoder.popDebugGroup(threadIndex);
 }
 
 gfx::Context& UploadPass::getContext() {

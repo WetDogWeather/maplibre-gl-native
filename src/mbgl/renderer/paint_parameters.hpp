@@ -58,13 +58,18 @@ public:
                     RenderStaticData&,
                     LineAtlas&,
                     PatternAtlas&,
-                    uint64_t frameCount);
-    ~PaintParameters();
+                    std::uint64_t frameCount,
+                    std::size_t renderThreadCount);
+    PaintParameters(PaintParameters&&);
+
+    // N.B.: Copies can be made, but they cannot outlive the original instance
+    // This is for use only when encoding in parallel, where each thread needs a separate copy
+    explicit PaintParameters(PaintParameters&);
+
+    ~PaintParameters() = default;
 
     gfx::Context& context;
     gfx::RendererBackend& backend;
-    std::unique_ptr<gfx::CommandEncoder> encoder;
-    std::unique_ptr<gfx::RenderPass> renderPass;
 
     const TransformParameters& transformParams;
     const TransformState& state;
@@ -87,6 +92,12 @@ public:
     // We're migrating to a dynamic one
     gfx::ShaderRegistry& shaders;
 
+    const std::unique_ptr<gfx::CommandEncoder>& getEncoder() const;
+    void setEncoder(std::unique_ptr<gfx::CommandEncoder>&&);
+
+    const std::unique_ptr<gfx::RenderPass>& getRenderPass() const;
+    void setRenderPass(std::unique_ptr<gfx::RenderPass>&&);
+
     gfx::DepthMode depthModeForSublayer(uint8_t n, gfx::DepthMaskType) const;
     gfx::DepthMode depthModeFor3D() const;
     gfx::ColorMode colorModeForRenderPass() const;
@@ -94,11 +105,10 @@ public:
     mat4 matrixForTile(const UnwrappedTileID&, bool aligned = false) const;
 
     // Stencil handling
-public:
-    void renderTileClippingMasks(const RenderTiles&);
+    void renderTileClippingMasks(std::optional<std::size_t> threadIndex, const RenderTiles&);
 
     /// Clear the stencil buffer, even if there are no tile masks (for 3D)
-    void clearStencil();
+    void clearStencil(std::optional<std::size_t> threadIndex);
 
     /// @brief Get a stencil mode for rendering constrined to the specified tile ID.
     /// The tile ID must have been present in the set previously passed to `renderTileClippingMasks`
@@ -108,24 +118,26 @@ public:
     /// @details Clears the tile stencil masks, so `stencilModeForClipping`
     ///          cannot be used until `renderTileClippingMasks` is called again.
     /// @return The stencil mode, each value is unique.
-    gfx::StencilMode stencilModeFor3D();
+    gfx::StencilMode stencilModeFor3D(std::optional<std::size_t> threadIndex);
 
 private:
-    template <typename TIter>
-    using GetTileIDFunc = const UnwrappedTileID& (*)(const typename TIter::value_type&);
-    template <typename TIter>
-    void renderTileClippingMasks(TIter beg, TIter end, GetTileIDFunc<TIter> unwrap);
-
     // This needs to be an ordered map so that we have the same order as the renderTiles.
     std::map<UnwrappedTileID, int32_t> tileClippingMaskIDs;
     int32_t nextStencilID = 1;
 
+    std::unique_ptr<gfx::CommandEncoder> encoder;
+    std::unique_ptr<gfx::RenderPass> renderPass;
+
+    std::optional<std::reference_wrapper<PaintParameters>> baseParameters;
+
 public:
-    uint32_t currentLayer;
-    float depthRangeSize;
+    uint32_t currentLayer = 0;
+    float depthRangeSize = 0.0f;
     uint32_t opaquePassCutoff = 0;
-    float symbolFadeChange;
+    float symbolFadeChange = 0.0f;
     const uint64_t frameCount;
+    std::size_t renderThreadCount;
+    std::optional<std::size_t> renderThreadIndex;
 
     static constexpr int numSublayers = 3;
 #if MLN_RENDER_BACKEND_OPENGL

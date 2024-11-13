@@ -24,8 +24,8 @@ public:
     UploadPass(gl::CommandEncoder&, const char* name);
 
 private:
-    void pushDebugGroup(const char* name) override;
-    void popDebugGroup() override;
+    void pushDebugGroup(std::optional<std::size_t> threadIndex, const char* name) override;
+    void popDebugGroup(std::optional<std::size_t> threadIndex) override;
 
 public:
 #if MLN_DRAWABLE_RENDERER

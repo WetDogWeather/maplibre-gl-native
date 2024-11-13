@@ -27,7 +27,8 @@ const std::shared_ptr<UniformBuffer>& UniformBufferArray::get(const size_t id) c
 }
 
 const std::shared_ptr<UniformBuffer>& UniformBufferArray::set(const size_t id,
-                                                              std::shared_ptr<UniformBuffer> uniformBuffer) {
+                                                              std::shared_ptr<UniformBuffer> uniformBuffer,
+                                                              std::optional<std::size_t>) {
     assert(id < uniformBufferVector.size());
     if (id >= uniformBufferVector.size()) {
         return nullref;
@@ -39,12 +40,17 @@ const std::shared_ptr<UniformBuffer>& UniformBufferArray::set(const size_t id,
 void UniformBufferArray::createOrUpdate(const size_t id,
                                         const std::vector<uint8_t>& data,
                                         gfx::Context& context,
+                                        std::optional<std::size_t> threadIndex,
                                         bool persistent) {
-    createOrUpdate(id, data.data(), data.size(), context, persistent);
+    createOrUpdate(id, data.data(), data.size(), context, threadIndex, persistent);
 }
 
-void UniformBufferArray::createOrUpdate(
-    const size_t id, const void* data, const std::size_t size, gfx::Context& context, bool persistent) {
+void UniformBufferArray::createOrUpdate(const size_t id,
+                                        const void* data,
+                                        const std::size_t size,
+                                        gfx::Context& context,
+                                        std::optional<std::size_t>,
+                                        bool persistent) {
     if (auto& ubo = get(id); ubo && ubo->getSize() == size) {
         ubo->update(data, size);
     } else {

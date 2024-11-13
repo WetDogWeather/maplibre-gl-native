@@ -8,7 +8,7 @@
 
 namespace mbgl {
 
-void LocationIndicatorLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters& params) {
+void LocationIndicatorLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParameters& parameters) {
     if (layerGroup.empty()) {
         return;
     }
@@ -30,7 +30,8 @@ void LocationIndicatorLayerTweaker::execute(LayerGroupBase& layerGroup, const Pa
                 shaders::CommonUBO circleUBO = {/* .matrix */ util::cast<float>(projectionCircle),
                                                 /* .color */ props.evaluated.get<style::AccuracyRadiusColor>()};
 
-                drawableUniforms.createOrUpdate(shaders::idCommonUBO, &circleUBO, params.context);
+                drawableUniforms.createOrUpdate(
+                    shaders::idCommonUBO, &circleUBO, parameters.context, parameters.renderThreadIndex);
                 break;
             }
 
@@ -38,7 +39,8 @@ void LocationIndicatorLayerTweaker::execute(LayerGroupBase& layerGroup, const Pa
                 shaders::CommonUBO circleUBO = {/* .matrix */ util::cast<float>(projectionCircle),
                                                 /* .color */ props.evaluated.get<style::AccuracyRadiusBorderColor>()};
 
-                drawableUniforms.createOrUpdate(shaders::idCommonUBO, &circleUBO, params.context);
+                drawableUniforms.createOrUpdate(
+                    shaders::idCommonUBO, &circleUBO, parameters.context, parameters.renderThreadIndex);
                 break;
             }
 
@@ -47,7 +49,8 @@ void LocationIndicatorLayerTweaker::execute(LayerGroupBase& layerGroup, const Pa
             case RenderLocationIndicatorLayer::LocationIndicatorComponentType::Puck:
                 [[fallthrough]];
             case RenderLocationIndicatorLayer::LocationIndicatorComponentType::PuckHat:
-                drawableUniforms.createOrUpdate(shaders::idCommonUBO, &quadUBO, params.context);
+                drawableUniforms.createOrUpdate(
+                    shaders::idCommonUBO, &quadUBO, parameters.context, parameters.renderThreadIndex);
                 break;
 
             default:

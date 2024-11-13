@@ -30,7 +30,7 @@ void CollisionLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParam
 
 #if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(label.c_str());
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex, label);
 #endif
 
     propertiesUpdated = false;
@@ -65,7 +65,7 @@ void CollisionLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParam
             /*.pad*/ 0};
 
         auto& drawableUniforms = drawable.mutableUniformBuffers();
-        drawableUniforms.createOrUpdate(idCollisionUBO, &drawableUBO, context);
+        drawableUniforms.createOrUpdate(idCollisionUBO, &drawableUBO, context, parameters.renderThreadIndex);
     });
 }
 

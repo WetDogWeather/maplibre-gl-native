@@ -92,7 +92,8 @@ public:
 
     void execute(LayerGroupBase& layerGroup, const PaintParameters& parameters) override {
         auto& layerUniforms = layerGroup.mutableUniformBuffers();
-        layerUniforms.createOrUpdate(idLineEvaluatedPropsUBO, &linePropertiesUBO, parameters.context);
+        layerUniforms.createOrUpdate(
+            idLineEvaluatedPropsUBO, &linePropertiesUBO, parameters.context, parameters.renderThreadIndex);
 
         // We would need to set up `idLineExpressionUBO` if the expression mask isn't empty
         assert(linePropertiesUBO.expressionMask == LineExpressionMask::None);
@@ -106,7 +107,7 @@ public:
             /* width = */ nullptr,
             /* floorWidth = */ nullptr,
         };
-        layerUniforms.createOrUpdate(idLineExpressionUBO, &exprUBO, parameters.context);
+        layerUniforms.createOrUpdate(idLineExpressionUBO, &exprUBO, parameters.context, parameters.renderThreadIndex);
     }
 
 private:
@@ -216,7 +217,7 @@ void TileSourceRenderItem::updateDebugDrawables(DebugLayerGroupMap& debugLayerGr
         auto updatedCount = tileLayerGroup->visitDrawables(renderPass, tileID, [&](gfx::Drawable& drawable) {
             // update existing drawable
             auto& drawableUniforms = drawable.mutableUniformBuffers();
-            drawableUniforms.createOrUpdate(idDebugUBO, &debugUBO, context);
+            drawableUniforms.createOrUpdate(idDebugUBO, &debugUBO, context, parameters.renderThreadIndex);
         });
         return updatedCount;
     };
@@ -245,7 +246,7 @@ void TileSourceRenderItem::updateDebugDrawables(DebugLayerGroupMap& debugLayerGr
         for (auto& drawable : debugBuilder->clearDrawables()) {
             drawable->setTileID(tileID);
             auto& drawableUniforms = drawable->mutableUniformBuffers();
-            drawableUniforms.createOrUpdate(idDebugUBO, &debugUBO, context);
+            drawableUniforms.createOrUpdate(idDebugUBO, &debugUBO, context, parameters.renderThreadIndex);
 
             tileLayerGroup->addDrawable(renderPass, tileID, std::move(drawable));
         }
@@ -299,8 +300,10 @@ void TileSourceRenderItem::updateDebugDrawables(DebugLayerGroupMap& debugLayerGr
                                                                             0,
                                                                             0};
                 auto& drawableUniforms = drawable.mutableUniformBuffers();
-                drawableUniforms.createOrUpdate(idLineDrawableUBO, &drawableUBO, parameters.context);
-                drawableUniforms.createOrUpdate(idLineInterpolationUBO, &lineInterpolationUBO, parameters.context);
+                drawableUniforms.createOrUpdate(
+                    idLineDrawableUBO, &drawableUBO, parameters.context, parameters.renderThreadIndex);
+                drawableUniforms.createOrUpdate(
+                    idLineInterpolationUBO, &lineInterpolationUBO, parameters.context, parameters.renderThreadIndex);
 
 #if !MLN_RENDER_BACKEND_VULKAN
                 drawableUniforms.createOrUpdate(idLineEvaluatedPropsUBO, &linePropertiesUBO, parameters.context);
@@ -317,7 +320,8 @@ void TileSourceRenderItem::updateDebugDrawables(DebugLayerGroupMap& debugLayerGr
                     /* width = */ nullptr,
                     /* floorWidth = */ nullptr,
                 };
-                drawableUniforms.createOrUpdate(idLineExpressionUBO, &exprUBO, parameters.context);
+                drawableUniforms.createOrUpdate(
+                    idLineExpressionUBO, &exprUBO, parameters.context, parameters.renderThreadIndex);
 #endif
             };
 

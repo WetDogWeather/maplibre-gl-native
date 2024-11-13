@@ -27,9 +27,9 @@ void BackgroundLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintPara
         return;
     }
 
-#if defined(DEBUG)
+#if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(label.c_str());
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex, label);
 #endif
 
     const auto& evaluated = static_cast<const BackgroundLayerProperties&>(*evaluatedProperties).evaluated;
@@ -63,14 +63,14 @@ void BackgroundLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintPara
                                                     /* .scale_b = */ crossfade.toScale,
                                                     /* .mix = */ crossfade.t,
                                                     /* .opacity = */ evaluated.get<BackgroundOpacity>()};
-        layerUniforms.createOrUpdate(idBackgroundLayerUBO, &layerUBO, context);
+        layerUniforms.createOrUpdate(idBackgroundLayerUBO, &layerUBO, context, parameters.renderThreadIndex);
     } else {
         const BackgroundLayerUBO layerUBO = {/* .color = */ evaluated.get<BackgroundColor>(),
                                              /* .opacity = */ evaluated.get<BackgroundOpacity>(),
                                              /* .pad1/2/3 = */ 0,
                                              0,
                                              0};
-        layerUniforms.createOrUpdate(idBackgroundLayerUBO, &layerUBO, context);
+        layerUniforms.createOrUpdate(idBackgroundLayerUBO, &layerUBO, context, parameters.renderThreadIndex);
     }
 
     visitLayerGroupDrawables(layerGroup, [&](gfx::Drawable& drawable) {
@@ -111,10 +111,12 @@ void BackgroundLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintPara
                 /* .pad1/2/3 = */ 0,
                 0,
                 0};
-            drawableUniforms.createOrUpdate(idBackgroundDrawableUBO, &drawableUBO, context);
+            drawableUniforms.createOrUpdate(
+                idBackgroundDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
         } else {
             const BackgroundDrawableUBO drawableUBO = {/* .matrix = */ util::cast<float>(matrix)};
-            drawableUniforms.createOrUpdate(idBackgroundDrawableUBO, &drawableUBO, context);
+            drawableUniforms.createOrUpdate(
+                idBackgroundDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
         }
     });
 }

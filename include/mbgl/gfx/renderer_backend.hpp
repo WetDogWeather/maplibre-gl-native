@@ -37,6 +37,10 @@ public:
     // Return the background thread pool assigned to this backend
     TaggedScheduler& getThreadPool() noexcept { return threadPool; }
 
+    /// Return the high-priority thread pool used for render tasks
+    virtual Scheduler* getRenderThreadPool() noexcept { return nullptr; }
+    virtual std::size_t getRenderThreadCount() noexcept { return 0; }
+
     /// Returns the device's context.
     Context& getContext();
 

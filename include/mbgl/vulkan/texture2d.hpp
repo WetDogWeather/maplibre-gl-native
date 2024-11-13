@@ -59,7 +59,7 @@ public:
     size_t getPixelStride() const noexcept override;
     size_t numChannels() const noexcept override;
 
-    bool isDirty() const { return samplerStateDirty || textureDirty; }
+    bool isDirty() const noexcept { return samplerStateDirty || textureDirty; }
 
     void create() noexcept override;
 
@@ -117,6 +117,7 @@ private:
     vk::ImageLayout imageLayout{vk::ImageLayout::eUndefined};
 
     vk::Sampler sampler{};
+    MLN_TRACE_LOCKABLE(std::mutex, samplerMutex);
 
     Texture2DUsage textureUsage{Texture2DUsage::ShaderInput};
 };

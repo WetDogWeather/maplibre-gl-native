@@ -149,7 +149,7 @@ void RenderHillshadeLayer::render(PaintParameters& parameters) {
         checkRenderability(parameters, HillshadeProgram::activeBindingCount(allAttributeBindings));
 
         hillshadeProgram->draw(parameters.context,
-                               *parameters.renderPass,
+                               *parameters.getRenderPass(),
                                gfx::Triangles(),
                                parameters.depthModeForSublayer(0, gfx::DepthMaskType::ReadOnly),
                                gfx::StencilMode::disabled(),
@@ -185,8 +185,8 @@ void RenderHillshadeLayer::render(PaintParameters& parameters) {
             auto view = parameters.context.createOffscreenTexture({tilesize, tilesize},
                                                                   gfx::TextureChannelDataType::UnsignedByte);
 
-            auto renderPass = parameters.encoder->createRenderPass("hillshade prepare",
-                                                                   {*view, Color{0.0f, 0.0f, 0.0f, 0.0f}, {}, {}});
+            auto renderPass = parameters.getEncoder()->createRenderPass("hillshade prepare",
+                                                                        {*view, Color{0.0f, 0.0f, 0.0f, 0.0f}, {}, {}});
 
             const Properties<>::PossiblyEvaluated properties;
             const HillshadePrepareProgram::Binders paintAttributeData{properties, 0};

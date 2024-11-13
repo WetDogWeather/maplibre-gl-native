@@ -51,10 +51,10 @@ PaintParameters::PaintParameters(gfx::Context& context_,
                                  RenderStaticData& staticData_,
                                  LineAtlas& lineAtlas_,
                                  PatternAtlas& patternAtlas_,
-                                 uint64_t frameCount_)
+                                 uint64_t frameCount_,
+                                 std::size_t renderThreadCount_)
     : context(context_),
       backend(backend_),
-      encoder(context.createCommandEncoder()),
       transformParams(transformParams_),
       state(transformParams_.state),
       evaluatedLight(evaluatedLight_),
@@ -71,7 +71,9 @@ PaintParameters::PaintParameters(gfx::Context& context_,
       programs(staticData_.programs),
 #endif
       shaders(*staticData_.shaders),
-      frameCount(frameCount_) {
+      encoder(context.createCommandEncoder()),
+      frameCount(frameCount_),
+      renderThreadCount(renderThreadCount_) {
     pixelsToGLUnits = {{2.0f / state.getSize().width, -2.0f / state.getSize().height}};
 
     if (state.getViewportMode() == ViewportMode::FlippedY) {
@@ -79,7 +81,81 @@ PaintParameters::PaintParameters(gfx::Context& context_,
     }
 }
 
-PaintParameters::~PaintParameters() = default;
+PaintParameters::PaintParameters(PaintParameters&& other)
+    : context(other.context),
+      backend(other.backend),
+      transformParams(other.transformParams),
+      state(other.state),
+      evaluatedLight(other.evaluatedLight),
+      staticData(other.staticData),
+      lineAtlas(other.lineAtlas),
+      patternAtlas(other.patternAtlas),
+      pass(other.pass),
+      mapMode(other.mapMode),
+      debugOptions(other.debugOptions),
+      timePoint(other.timePoint),
+      pixelRatio(other.pixelRatio),
+      pixelsToGLUnits(other.pixelsToGLUnits),
+      programs(other.programs),
+      shaders(other.shaders),
+      tileClippingMaskIDs(std::move(other.tileClippingMaskIDs)),
+      nextStencilID(other.nextStencilID),
+      encoder(std::move(other.encoder)),
+      renderPass(std::move(other.renderPass)),
+      baseParameters(std::move(other.baseParameters)),
+      currentLayer(other.currentLayer),
+      depthRangeSize(other.depthRangeSize),
+      opaquePassCutoff(other.opaquePassCutoff),
+      symbolFadeChange(other.symbolFadeChange),
+      frameCount(other.frameCount),
+      renderThreadCount(other.renderThreadCount),
+      renderThreadIndex(other.renderThreadIndex) {}
+
+PaintParameters::PaintParameters(PaintParameters& other)
+    : context(other.context),
+      backend(other.backend),
+      transformParams(other.transformParams),
+      state(other.state),
+      evaluatedLight(other.evaluatedLight),
+      staticData(other.staticData),
+      lineAtlas(other.lineAtlas),
+      patternAtlas(other.patternAtlas),
+      pass(other.pass),
+      mapMode(other.mapMode),
+      debugOptions(other.debugOptions),
+      timePoint(other.timePoint),
+      pixelRatio(other.pixelRatio),
+      pixelsToGLUnits(other.pixelsToGLUnits),
+      programs(other.programs),
+      shaders(other.shaders),
+      tileClippingMaskIDs(), // not copied
+      nextStencilID(1),      // not copied
+      encoder(),             // not copied
+      renderPass(),          // not copied
+      baseParameters(other.baseParameters ? other.baseParameters->get() : other),
+      currentLayer(other.currentLayer),
+      depthRangeSize(other.depthRangeSize),
+      opaquePassCutoff(other.opaquePassCutoff),
+      symbolFadeChange(other.symbolFadeChange),
+      frameCount(other.frameCount),
+      renderThreadCount(other.renderThreadCount),
+      renderThreadIndex(other.renderThreadIndex) {}
+
+const std::unique_ptr<gfx::CommandEncoder>& PaintParameters::getEncoder() const {
+    return baseParameters ? baseParameters->get().encoder : encoder;
+}
+
+void PaintParameters::setEncoder(std::unique_ptr<gfx::CommandEncoder>&& enc) {
+    (baseParameters ? baseParameters->get() : *this).encoder = std::move(enc);
+}
+
+const std::unique_ptr<gfx::RenderPass>& PaintParameters::getRenderPass() const {
+    return baseParameters ? baseParameters->get().renderPass : renderPass;
+}
+
+void PaintParameters::setRenderPass(std::unique_ptr<gfx::RenderPass>&& rp) {
+    (baseParameters ? baseParameters->get() : *this).renderPass = std::move(rp);
+}
 
 mat4 PaintParameters::matrixForTile(const UnwrappedTileID& tileID, bool aligned) const {
     mat4 matrix;
@@ -126,7 +202,9 @@ bool tileIDsCovered(const RenderTiles& tiles, const TileMaskIDMap& idMap) {
 
 } // namespace
 
-void PaintParameters::clearStencil() {
+void PaintParameters::clearStencil([[maybe_unused]] std::optional<std::size_t> threadIndex) {
+    MLN_TRACE_FUNC();
+
     nextStencilID = 1;
     tileClippingMaskIDs.clear();
 
@@ -135,7 +213,7 @@ void PaintParameters::clearStencil() {
 
     // Metal doesn't have an equivalent of `glClear`, so we clear the buffer by drawing zero to (0:0,0)
 #if !defined(NDEBUG)
-    const auto debugGroup = renderPass->createDebugGroup("tile-clip-mask-clear");
+    const auto debugGroup = getRenderPass()->createDebugGroup(threadIndex, "tile-clip-mask-clear");
 #endif
 
     const std::vector<shaders::ClipUBO> tileUBO = {
@@ -144,11 +222,11 @@ void PaintParameters::clearStencil() {
                          /*.pad=*/0,
                          0,
                          0}};
-    mtlContext.renderTileClippingMasks(*renderPass, staticData, tileUBO);
+    mtlContext.renderTileClippingMasks(*getRenderPass(), staticData, tileUBO);
     context.renderingStats().stencilClears++;
 #elif MLN_RENDER_BACKEND_VULKAN
-    const auto& vulkanRenderPass = static_cast<vulkan::RenderPass&>(*renderPass);
-    vulkanRenderPass.clearStencil();
+    const auto& vulkanRenderPass = static_cast<vulkan::RenderPass&>(*getRenderPass());
+    vulkanRenderPass.clearStencil(threadIndex, 0);
 
     context.renderingStats().stencilClears++;
 #else // !MLN_RENDER_BACKEND_METAL
@@ -156,9 +234,11 @@ void PaintParameters::clearStencil() {
 #endif
 }
 
-void PaintParameters::renderTileClippingMasks(const RenderTiles& renderTiles) {
+void PaintParameters::renderTileClippingMasks(std::optional<std::size_t> threadIndex, const RenderTiles& renderTiles) {
+    MLN_TRACE_FUNC();
+
     // We can avoid updating the mask if it already contains the same set of tiles.
-    if (!renderTiles || !renderPass || tileIDsCovered(renderTiles, tileClippingMaskIDs)) {
+    if (!renderTiles || !getRenderPass() || tileIDsCovered(renderTiles, tileClippingMaskIDs)) {
         return;
     }
 
@@ -168,7 +248,7 @@ void PaintParameters::renderTileClippingMasks(const RenderTiles& renderTiles) {
     // values remain set somewhere in it. Otherwise we can continue to overwrite it incrementally.
     const auto count = renderTiles->size();
     if (nextStencilID + count > maxStencilValue) {
-        clearStencil();
+        clearStencil(threadIndex);
     }
 
 #if MLN_RENDER_BACKEND_METAL
@@ -200,11 +280,11 @@ void PaintParameters::renderTileClippingMasks(const RenderTiles& renderTiles) {
 
     if (!tileUBOs.empty()) {
 #if !defined(NDEBUG)
-        const auto debugGroup = renderPass->createDebugGroup("tile-clip-masks");
+        const auto debugGroup = getRenderPass()->createDebugGroup(threadIndex, "tile-clip-masks");
 #endif
 
         auto& mtlContext = static_cast<mtl::Context&>(context);
-        mtlContext.renderTileClippingMasks(*renderPass, staticData, tileUBOs);
+        mtlContext.renderTileClippingMasks(*getRenderPass(), staticData, tileUBOs);
 
         mtlContext.renderingStats().stencilUpdates++;
     }
@@ -234,11 +314,11 @@ void PaintParameters::renderTileClippingMasks(const RenderTiles& renderTiles) {
 
     if (!tileUBOs.empty()) {
 #if !defined(NDEBUG)
-        const auto debugGroup = renderPass->createDebugGroup("tile-clip-masks");
+        const auto debugGroup = getRenderPass()->createDebugGroup(threadIndex, "tile-clip-masks");
 #endif
 
         auto& vulkanContext = static_cast<vulkan::Context&>(context);
-        vulkanContext.renderTileClippingMasks(*renderPass, staticData, tileUBOs);
+        vulkanContext.renderTileClippingMasks(threadIndex, *getRenderPass(), staticData, tileUBOs);
         vulkanContext.renderingStats().stencilUpdates++;
     }
 
@@ -268,7 +348,7 @@ void PaintParameters::renderTileClippingMasks(const RenderTiles& renderTiles) {
         }
 
         program->draw(context,
-                      *renderPass,
+                      *getRenderPass(),
                       gfx::Triangles(),
                       gfx::DepthMode::disabled(),
                       gfx::StencilMode{gfx::StencilMode::Always{},
@@ -308,9 +388,9 @@ gfx::StencilMode PaintParameters::stencilModeForClipping(const UnwrappedTileID& 
                             gfx::StencilOpType::Replace};
 }
 
-gfx::StencilMode PaintParameters::stencilModeFor3D() {
+gfx::StencilMode PaintParameters::stencilModeFor3D(std::optional<std::size_t> threadIndex) {
     if (nextStencilID + 1 > maxStencilValue) {
-        clearStencil();
+        clearStencil(threadIndex);
     }
 
     // We're potentially destroying the stencil clipping mask in this pass. That

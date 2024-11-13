@@ -27,6 +27,8 @@ public:
 
         uint8_t maxAnisotropy{1};
         bool mipmapped{false};
+
+        bool operator==(const SamplerState& rhs) const = default;
     };
 
 public:

@@ -67,7 +67,7 @@ void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
     }
 
 #if !defined(NDEBUG)
-    const auto debugGroupRender = parameters.encoder->createDebugGroup(getName() + "-render");
+    const auto debugGroupRender = parameters.getEncoder()->createDebugGroup(getName() + "-render");
 #endif
 
     // If we're doing 3D stenciling and have any features to draw, set up the single-value stencil mask.

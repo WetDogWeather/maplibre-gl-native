@@ -67,6 +67,9 @@ public:
     /// Get drawable's ID
     const util::SimpleIdentity& getID() const { return uniqueID; }
 
+    /// Called before beginning the frame
+    virtual void preDraw(PaintParameters&) {}
+
     /// Draw the drawable
     virtual void draw(PaintParameters&) const = 0;
 

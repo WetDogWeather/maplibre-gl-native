@@ -1,7 +1,8 @@
 #pragma once
 
-#include <mbgl/renderer/render_orchestrator.hpp>
 #include <mbgl/gfx/context_observer.hpp>
+#include <mbgl/renderer/render_orchestrator.hpp>
+#include <mbgl/util/thread_pool.hpp>
 
 #if MLN_RENDER_BACKEND_METAL
 #include <mbgl/mtl/mtl_fwd.hpp>

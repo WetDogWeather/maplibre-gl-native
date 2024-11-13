@@ -40,7 +40,7 @@ void LayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
     }
 
 #if !defined(NDEBUG)
-    const auto debugGroup = parameters.encoder->createDebugGroup(getName() + "-render");
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(getName() + "-render");
 #endif
 
     auto& context = static_cast<Context&>(parameters.context);

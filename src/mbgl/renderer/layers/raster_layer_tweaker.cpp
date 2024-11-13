@@ -63,7 +63,7 @@ void RasterLayerTweaker::execute([[maybe_unused]] LayerGroupBase& layerGroup,
         propertiesUpdated = false;
     }
     auto& layerUniforms = layerGroup.mutableUniformBuffers();
-    layerUniforms.set(idRasterEvaluatedPropsUBO, evaluatedPropsUniformBuffer);
+    layerUniforms.set(idRasterEvaluatedPropsUBO, evaluatedPropsUniformBuffer, parameters.renderThreadIndex);
 
     visitLayerGroupDrawables(layerGroup, [&](gfx::Drawable& drawable) {
         if (!checkTweakDrawable(drawable)) {
@@ -97,7 +97,8 @@ void RasterLayerTweaker::execute([[maybe_unused]] LayerGroupBase& layerGroup,
 
         const RasterDrawableUBO drawableUBO{/*.matrix = */ util::cast<float>(matrix)};
         auto& drawableUniforms = drawable.mutableUniformBuffers();
-        drawableUniforms.createOrUpdate(idRasterDrawableUBO, &drawableUBO, parameters.context);
+        drawableUniforms.createOrUpdate(
+            idRasterDrawableUBO, &drawableUBO, parameters.context, parameters.renderThreadIndex);
     });
 }
 

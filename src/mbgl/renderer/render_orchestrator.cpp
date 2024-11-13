@@ -116,6 +116,7 @@ public:
 
 RenderOrchestrator::RenderOrchestrator(bool backgroundLayerAsColor_,
                                        TaggedScheduler& threadPool_,
+                                       Scheduler* renderThreadPool_,
                                        const std::optional<std::string>& localFontFamily_)
     : observer(&nullObserver()),
       glyphManager(std::make_unique<GlyphManager>(std::make_unique<LocalGlyphRasterizer>(localFontFamily_))),
@@ -127,7 +128,8 @@ RenderOrchestrator::RenderOrchestrator(bool backgroundLayerAsColor_,
       layerImpls(makeMutable<std::vector<Immutable<style::Layer::Impl>>>()),
       renderLight(makeMutable<Light::Impl>()),
       backgroundLayerAsColor(backgroundLayerAsColor_),
-      threadPool(threadPool_) {
+      threadPool(threadPool_),
+      renderThreadPool(renderThreadPool_) {
     glyphManager->setObserver(this);
     imageManager->setObserver(this);
 }
@@ -220,27 +222,30 @@ std::unique_ptr<RenderTree> RenderOrchestrator::createRenderTree(
     // relayout when they have a different size.
     bool hasImageDiff = !imageDiff.removed.empty();
 
-    // Remove removed images from sprite atlas.
-    for (const auto& entry : imageDiff.removed) {
-        imageManager->removeImage(entry.first);
-        patternAtlas->removePattern(entry.first);
-    }
-
-    // Add added images to sprite atlas.
-    for (const auto& entry : imageDiff.added) {
-        imageManager->addImage(entry.second);
-    }
-
-    // Update changed images.
-    for (const auto& entry : imageDiff.changed) {
-        if (imageManager->updateImage(entry.second.after)) {
+    {
+        MLN_TRACE_ZONE(images);
+        // Remove removed images from sprite atlas.
+        for (const auto& entry : imageDiff.removed) {
+            imageManager->removeImage(entry.first);
             patternAtlas->removePattern(entry.first);
-            hasImageDiff = true;
         }
-    }
 
-    imageManager->notifyIfMissingImageAdded();
-    imageManager->setLoaded(updateParameters->spriteLoaded);
+        // Add added images to sprite atlas.
+        for (const auto& entry : imageDiff.added) {
+            imageManager->addImage(entry.second);
+        }
+
+        // Update changed images.
+        for (const auto& entry : imageDiff.changed) {
+            if (imageManager->updateImage(entry.second.after)) {
+                patternAtlas->removePattern(entry.first);
+                hasImageDiff = true;
+            }
+        }
+
+        imageManager->notifyIfMissingImageAdded();
+        imageManager->setLoaded(updateParameters->spriteLoaded);
+    }
 
     const LayerDifference layerDiff = diffLayers(layerImpls, updateParameters->layers);
     layerImpls = updateParameters->layers;

@@ -10,6 +10,7 @@
 #include <mbgl/vulkan/command_encoder.hpp>
 #include <mbgl/renderer/paint_parameters.hpp>
 #include <mbgl/util/convert.hpp>
+#include <mbgl/util/instrumentation.hpp>
 #include <mbgl/util/logging.hpp>
 
 namespace mbgl {
@@ -19,29 +20,38 @@ TileLayerGroup::TileLayerGroup(int32_t layerIndex_, std::size_t initialCapacity,
     : mbgl::TileLayerGroup(layerIndex_, initialCapacity, std::move(name_)),
       uniformBuffers(DescriptorSetType::Layer, shaders::layerUBOStartId, shaders::maxUBOCountPerLayer) {}
 
-void TileLayerGroup::upload(gfx::UploadPass& uploadPass) {
+void TileLayerGroup::upload(gfx::UploadPass& uploadPass, PaintParameters& parameters) {
     if (!enabled || !getDrawableCount()) {
         return;
     }
 
+    MLN_TRACE_FUNC();
+
 #if !defined(NDEBUG)
-    const auto debugGroup = uploadPass.createDebugGroup(getName() + "-upload");
+    const auto debugGroup = uploadPass.createDebugGroup(parameters.renderThreadIndex, getName() + "-upload");
 #endif
 
     visitDrawables([&](gfx::Drawable& drawable_) {
         if (drawable_.getEnabled()) {
             auto& drawable = static_cast<Drawable&>(drawable_);
-            drawable.upload(uploadPass);
+            drawable.upload(uploadPass, parameters);
         }
     });
 }
 
+void TileLayerGroup::preRender(RenderOrchestrator&, PaintParameters& parameters) {
+    visitDrawables([&](gfx::Drawable& drawable) { drawable.preDraw(parameters); });
+    uniformBuffers.init(parameters.context, parameters.renderThreadCount);
+}
+
 void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
-    if (!enabled || !getDrawableCount() || !parameters.renderPass) {
+    if (!enabled || !getDrawableCount() || !parameters.getRenderPass()) {
         return;
     }
 
-    auto& renderPass = static_cast<RenderPass&>(*parameters.renderPass);
+    MLN_TRACE_FUNC();
+
+    auto& renderPass = static_cast<RenderPass&>(*parameters.getRenderPass());
     auto& encoder = renderPass.getEncoder();
 
     // `stencilModeFor3D` uses a different stencil mask value each time its called, so if the
@@ -67,7 +77,8 @@ void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
     }
 
 #if !defined(NDEBUG)
-    const auto debugGroupRender = parameters.encoder->createDebugGroup(getName() + "-render");
+    const auto debugGroupRender = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex,
+                                                                            getName() + "-render");
 #endif
 
     // If we're doing 3D stenciling and have any features to draw, set up the single-value stencil mask.
@@ -77,10 +88,10 @@ void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
         depthMode3d = parameters.depthModeFor3D();
 
         if (stencil3d) {
-            stencilMode3d = parameters.stencilModeFor3D();
+            stencilMode3d = parameters.stencilModeFor3D(parameters.renderThreadIndex);
         }
     } else if (stencilTiles && !stencilTiles->empty()) {
-        parameters.renderTileClippingMasks(stencilTiles);
+        parameters.renderTileClippingMasks(parameters.renderThreadIndex, stencilTiles);
     }
 
     bool bindUBOs = false;
@@ -94,7 +105,7 @@ void TileLayerGroup::render(RenderOrchestrator&, PaintParameters& parameters) {
         }
 
         if (!bindUBOs) {
-            uniformBuffers.bindDescriptorSets(encoder);
+            uniformBuffers.bindDescriptorSets(encoder, parameters.renderThreadIndex);
             bindUBOs = true;
         }
 

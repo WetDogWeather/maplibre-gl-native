@@ -73,7 +73,7 @@ public:
     }
 
     /// Upload the layer groups
-    void upload(gfx::UploadPass& uploadPass);
+    void upload(gfx::UploadPass&, PaintParameters&);
 
     /// Render the layer groups
     void render(RenderOrchestrator&, const RenderTree&, PaintParameters&);

@@ -9,6 +9,7 @@ namespace mbgl {
 namespace vulkan {
 
 class CommandEncoder;
+class Context;
 
 enum class DescriptorSetType : uint8_t {
     Global,
@@ -36,7 +37,10 @@ struct DescriptorPoolGrowable {
     std::vector<PoolInfo> pools;
     int32_t currentPoolIndex{-1};
 
-    PoolInfo& current() { return pools[currentPoolIndex]; }
+    PoolInfo& current() {
+        assert(0 <= currentPoolIndex);
+        return pools[currentPoolIndex];
+    }
 
     DescriptorPoolGrowable() = default;
     DescriptorPoolGrowable(uint32_t maxSets_, uint32_t descriptorsPerSet_, float growFactor_ = 1.5f)
@@ -47,40 +51,53 @@ struct DescriptorPoolGrowable {
 
 class DescriptorSet {
 public:
-    DescriptorSet(Context& context_, DescriptorSetType type_);
+    DescriptorSet(Context&, DescriptorSetType, std::size_t threadCount_);
     virtual ~DescriptorSet();
 
-    void allocate();
+    void allocate(std::optional<std::size_t> threadIndex);
 
-    void markDirty(bool value = true);
-    void bind(CommandEncoder& encoder);
+    void markDirty(std::optional<std::size_t> threadIndex, bool value = true);
+    void bind(CommandEncoder&, std::optional<std::size_t> threadIndex);
 
 protected:
     void createDescriptorPool(DescriptorPoolGrowable& growablePool);
 
+    std::size_t indexFor(std::optional<std::size_t> threadIndex) const {
+        assert(!threadIndex || *threadIndex < threads.size());
+        return threadIndex ? *threadIndex + 1 : 0;
+    }
+
 protected:
     Context& context;
-    DescriptorSetType type;
+    const DescriptorSetType type;
+    const std::size_t threadCount;
 
-    std::vector<bool> dirty;
-    std::vector<vk::DescriptorSet> descriptorSets;
-    int32_t descriptorPoolIndex{-1};
+    struct PerThreadData {
+        std::vector<bool> dirty;
+        std::vector<vk::DescriptorSet> descriptorSets;
+        int32_t descriptorPoolIndex{-1};
+    };
+    std::vector<PerThreadData> threads;
 };
 
 class UniformDescriptorSet : public DescriptorSet {
 public:
-    UniformDescriptorSet(Context& context_, DescriptorSetType type_);
+    UniformDescriptorSet(Context&, DescriptorSetType, std::size_t threadCount);
     virtual ~UniformDescriptorSet() = default;
 
-    void update(const gfx::UniformBufferArray& uniforms, uint32_t uniformStartIndex, uint32_t descriptorBindingCount);
+    void update(const gfx::UniformBufferArray& uniforms,
+                uint32_t uniformStartIndex,
+                uint32_t descriptorBindingCount,
+                std::optional<std::size_t> threadIndex);
 };
 
 class ImageDescriptorSet : public DescriptorSet {
 public:
-    ImageDescriptorSet(Context& context_);
+    ImageDescriptorSet(Context&, std::size_t threadCount);
     virtual ~ImageDescriptorSet() = default;
 
-    void update(const std::array<gfx::Texture2DPtr, shaders::maxTextureCountPerShader>& textures);
+    void update(const std::array<gfx::Texture2DPtr, shaders::maxTextureCountPerShader>& textures,
+                std::optional<std::size_t> threadIndex);
 };
 
 } // namespace vulkan

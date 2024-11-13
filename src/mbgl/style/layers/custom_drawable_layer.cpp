@@ -122,9 +122,12 @@ public:
                                                                  0,
                                                                  0};
         auto& drawableUniforms = drawable.mutableUniformBuffers();
-        drawableUniforms.createOrUpdate(idLineDrawableUBO, &drawableUBO, parameters.context);
-        drawableUniforms.createOrUpdate(idLineInterpolationUBO, &lineInterpolationUBO, parameters.context);
-        drawableUniforms.createOrUpdate(idLineEvaluatedPropsUBO, &linePropertiesUBO, parameters.context);
+        drawableUniforms.createOrUpdate(
+            idLineDrawableUBO, &drawableUBO, parameters.context, parameters.renderThreadIndex);
+        drawableUniforms.createOrUpdate(
+            idLineInterpolationUBO, &lineInterpolationUBO, parameters.context, parameters.renderThreadIndex);
+        drawableUniforms.createOrUpdate(
+            idLineEvaluatedPropsUBO, &linePropertiesUBO, parameters.context, parameters.renderThreadIndex);
 
         // We would need to set up `idLineExpressionUBO` if the expression mask isn't empty
         assert(linePropertiesUBO.expressionMask == LineExpressionMask::None);
@@ -189,8 +192,10 @@ public:
         };
 
         auto& drawableUniforms = drawable.mutableUniformBuffers();
-        drawableUniforms.createOrUpdate(idWideVectorUniformsUBO, &uniform, parameters.context);
-        drawableUniforms.createOrUpdate(idWideVectorUniformWideVecUBO, &wideVec, parameters.context);
+        drawableUniforms.createOrUpdate(
+            idWideVectorUniformsUBO, &uniform, parameters.context, parameters.renderThreadIndex);
+        drawableUniforms.createOrUpdate(
+            idWideVectorUniformWideVecUBO, &wideVec, parameters.context, parameters.renderThreadIndex);
     };
 
 private:
@@ -235,9 +240,12 @@ public:
             /* .to_scale = */ 0.f,
         };
         auto& drawableUniforms = drawable.mutableUniformBuffers();
-        drawableUniforms.createOrUpdate(idFillDrawableUBO, &fillDrawableUBO, parameters.context);
-        drawableUniforms.createOrUpdate(idFillInterpolateUBO, &fillInterpolateUBO, parameters.context);
-        drawableUniforms.createOrUpdate(idFillEvaluatedPropsUBO, &fillPropertiesUBO, parameters.context);
+        drawableUniforms.createOrUpdate(
+            idFillDrawableUBO, &fillDrawableUBO, parameters.context, parameters.renderThreadIndex);
+        drawableUniforms.createOrUpdate(
+            idFillInterpolateUBO, &fillInterpolateUBO, parameters.context, parameters.renderThreadIndex);
+        drawableUniforms.createOrUpdate(
+            idFillEvaluatedPropsUBO, &fillPropertiesUBO, parameters.context, parameters.renderThreadIndex);
     };
 
 private:
@@ -290,8 +298,10 @@ public:
 
         // set UBOs
         auto& drawableUniforms = drawable.mutableUniformBuffers();
-        drawableUniforms.createOrUpdate(idCustomSymbolDrawableUBO, &drawableUBO, parameters.context);
-        drawableUniforms.createOrUpdate(idCustomSymbolParametersUBO, &parametersUBO, parameters.context);
+        drawableUniforms.createOrUpdate(
+            idCustomSymbolDrawableUBO, &drawableUBO, parameters.context, parameters.renderThreadIndex);
+        drawableUniforms.createOrUpdate(
+            idCustomSymbolParametersUBO, &parametersUBO, parameters.context, parameters.renderThreadIndex);
     };
 
 private:

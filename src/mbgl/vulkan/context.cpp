@@ -16,11 +16,10 @@
 #include <mbgl/vulkan/vertex_attribute.hpp>
 #include <mbgl/shaders/vulkan/shader_program.hpp>
 #include <mbgl/shaders/vulkan/clipping_mask.hpp>
-#include <mbgl/util/traits.hpp>
-#include <mbgl/util/std.hpp>
+#include <mbgl/util/hash.hpp>
 #include <mbgl/util/logging.hpp>
 #include <mbgl/util/thread_pool.hpp>
-#include <mbgl/util/hash.hpp>
+#include <mbgl/util/traits.hpp>
 
 #include <glslang/Public/ShaderLang.h>
 
@@ -51,7 +50,9 @@ public:
 Context::Context(RendererBackend& backend_)
     : gfx::Context(vulkan::maximumVertexBindingCount),
       backend(backend_),
-      globalUniformBuffers(DescriptorSetType::Global, 0, shaders::globalUBOCount) {
+      renderThreadCount(backend.getRenderThreadCount()),
+      globalUniformBuffers(DescriptorSetType::Global, 0, shaders::globalUBOCount),
+      descriptorPoolMaps(renderThreadCount + 1) {
     if (glslangRefCount++ == 0) {
         glslang::InitializeProcess();
     }
@@ -70,54 +71,74 @@ Context::~Context() noexcept {
 }
 
 void Context::initFrameResources() {
+    using namespace shaders;
+
     const auto& device = backend.getDevice();
     const auto frameCount = backend.getMaxFrames();
 
-    descriptorPoolMap.emplace(DescriptorSetType::Global,
-                              DescriptorPoolGrowable(globalDescriptorPoolSize, shaders::globalUBOCount));
+    // One set of descriptor pools for the primary render thread, and one for each secondary render thread
+    for (auto i = 0_uz; i <= renderThreadCount; ++i) {
+        auto& map = descriptorPoolMaps[i];
 
-    descriptorPoolMap.emplace(DescriptorSetType::Layer,
-                              DescriptorPoolGrowable(layerDescriptorPoolSize, shaders::maxUBOCountPerLayer));
-
-    descriptorPoolMap.emplace(
-        DescriptorSetType::DrawableUniform,
-        DescriptorPoolGrowable(drawableUniformDescriptorPoolSize, shaders::maxUBOCountPerDrawable));
-
-    descriptorPoolMap.emplace(
-        DescriptorSetType::DrawableImage,
-        DescriptorPoolGrowable(drawableImageDescriptorPoolSize, shaders::maxTextureCountPerShader));
+        map.reserve(underlying_type(DescriptorSetType::Count));
+        map.emplace(DescriptorSetType::Global,
+                    DescriptorPoolGrowable{globalDescriptorPoolSize, static_cast<uint32_t>(globalUBOCount)});
+        map.emplace(DescriptorSetType::Layer,
+                    DescriptorPoolGrowable{layerDescriptorPoolSize, static_cast<uint32_t>(maxUBOCountPerLayer)});
+        map.emplace(
+            DescriptorSetType::DrawableUniform,
+            DescriptorPoolGrowable{drawableUniformDescriptorPoolSize, static_cast<uint32_t>(maxUBOCountPerDrawable)});
+        map.emplace(
+            DescriptorSetType::DrawableImage,
+            DescriptorPoolGrowable{drawableImageDescriptorPoolSize, static_cast<uint32_t>(maxTextureCountPerShader)});
+    }
 
     // command buffers
-    const vk::CommandBufferAllocateInfo allocateInfo(
+    const vk::CommandBufferAllocateInfo primaryAllocateInfo(
         backend.getCommandPool().get(), vk::CommandBufferLevel::ePrimary, frameCount);
-
-    auto commandBuffers = backend.getDevice()->allocateCommandBuffersUnique(allocateInfo);
+    auto primaryCommandBuffers = device->allocateCommandBuffersUnique(primaryAllocateInfo);
+    auto uploadCommandBuffers = device->allocateCommandBuffersUnique(primaryAllocateInfo);
 
     frameResources.reserve(frameCount);
 
-    for (uint32_t index = 0; index < frameCount; ++index) {
-        frameResources.emplace_back(commandBuffers[index],
+    for (auto frameIndex = 0_uz; frameIndex < frameCount; ++frameIndex) {
+        frameResources.emplace_back(renderThreadCount,
+                                    primaryCommandBuffers[frameIndex],
+                                    uploadCommandBuffers[frameIndex],
                                     device->createSemaphoreUnique({}),
                                     device->createSemaphoreUnique({}),
                                     device->createFenceUnique(vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled)));
 
-        const auto& frame = frameResources.back();
+        auto& frame = frameResources.back();
 
-        backend.setDebugName(frame.commandBuffer.get(), "FrameCommandBuffer_" + std::to_string(index));
-        backend.setDebugName(frame.frameSemaphore.get(), "FrameSemaphore_" + std::to_string(index));
-        backend.setDebugName(frame.surfaceSemaphore.get(), "SurfaceSemaphore_" + std::to_string(index));
-        backend.setDebugName(frame.flightFrameFence.get(), "FrameFence_" + std::to_string(index));
+        eachRenderThread([&](const auto threadIndex) {
+            auto& pool = backend.getCommandPool(threadIndex);
+            const vk::CommandBufferAllocateInfo secondaryAllocateInfo(
+                pool.get(), vk::CommandBufferLevel::eSecondary, 1);
+            auto secondaryCommandBuffers = device->allocateCommandBuffersUnique(secondaryAllocateInfo);
+            vk::UniqueCommandBuffer& buffer = secondaryCommandBuffers[0];
+            backend.setDebugName(
+                buffer.get(),
+                "SecondaryCommandBuffer_" + util::toString(frameIndex) + "_" + util::toString(threadIndex));
+            frame.secondaryCommandBuffers[threadIndex] = std::move(buffer);
+        });
+
+        backend.setDebugName(frame.primaryCommandBuffer.get(), "PrimaryCommandBuffer_" + std::to_string(frameIndex));
+        backend.setDebugName(frame.uploadCommandBuffer.get(), "UploadCommandBuffer_" + std::to_string(frameIndex));
+        backend.setDebugName(frame.frameSemaphore.get(), "FrameSemaphore_" + std::to_string(frameIndex));
+        backend.setDebugName(frame.surfaceSemaphore.get(), "SurfaceSemaphore_" + std::to_string(frameIndex));
+        backend.setDebugName(frame.flightFrameFence.get(), "FrameFence_" + std::to_string(frameIndex));
     }
 
     // force placeholder texture upload before any descriptor sets
     (void)getDummyTexture();
 
     buildUniformDescriptorSetLayout(
-        globalUniformDescriptorSetLayout, shaders::globalUBOCount, "GlobalUniformDescriptorSetLayout");
+        globalUniformDescriptorSetLayout, globalUBOCount, "GlobalUniformDescriptorSetLayout");
     buildUniformDescriptorSetLayout(
-        layerUniformDescriptorSetLayout, shaders::maxUBOCountPerLayer, "LayerUniformDescriptorSetLayout");
+        layerUniformDescriptorSetLayout, maxUBOCountPerLayer, "LayerUniformDescriptorSetLayout");
     buildUniformDescriptorSetLayout(
-        drawableUniformDescriptorSetLayout, shaders::maxUBOCountPerDrawable, "DrawableUniformDescriptorSetLayout");
+        drawableUniformDescriptorSetLayout, maxUBOCountPerDrawable, "DrawableUniformDescriptorSetLayout");
     buildImageDescriptorSetLayout();
 }
 
@@ -206,15 +227,29 @@ void Context::beginFrame() {
     backend.startFrameCapture();
 
     auto& frame = frameResources[frameResourceIndex];
-    constexpr uint64_t timeout = std::numeric_limits<uint64_t>::max();
 
     waitFrame();
+
+    {
+        frame.primaryCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+        frame.primaryCommandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+
+        frame.uploadCommandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+        frame.uploadCommandBuffer->begin(vk::CommandBufferBeginInfo{vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+
+        for (auto& buffer : frame.secondaryCommandBuffers) {
+            if (buffer) {
+                buffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+            }
+        }
+    }
 
     frame.runDeletionQueue(*this);
 
     if (platformSurface) {
         MLN_TRACE_ZONE(acquireNextImageKHR);
         try {
+            constexpr uint64_t timeout = std::numeric_limits<uint64_t>::max();
             const vk::ResultValue acquireImageResult = device->acquireNextImageKHR(
                 renderableResource.getSwapchain().get(), timeout, frame.surfaceSemaphore.get(), nullptr);
 
@@ -240,10 +275,13 @@ void Context::beginFrame() {
         renderableResource.setAcquiredImageIndex(frameResourceIndex);
     }
 
-    frame.commandBuffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
-    frame.commandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
-
     backend.getThreadPool().runRenderJobs();
+
+    // Ensure that everything which will be run on threads has allocated space for
+    // per-thread structures so that no locking is necessary during rendering.
+    globalUniformBuffers.init(*this, renderThreadCount);
+    getGeneralPipelineLayout();
+    getPushConstantPipelineLayout();
 }
 
 void Context::endFrame() {
@@ -252,33 +290,32 @@ void Context::endFrame() {
 
 void Context::submitFrame() {
     MLN_TRACE_FUNC();
-    const auto& frame = frameResources[frameResourceIndex];
-    frame.commandBuffer->end();
-
     const auto& device = backend.getDevice();
     const auto& graphicsQueue = backend.getGraphicsQueue();
     auto& renderableResource = backend.getDefaultRenderable().getResource<SurfaceRenderableResource>();
     const auto& platformSurface = renderableResource.getPlatformSurface();
+    const auto& frame = frameResources[frameResourceIndex];
 
-    // submit frame commands
-    const vk::PipelineStageFlags waitStageMask[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
-    auto submitInfo = vk::SubmitInfo().setCommandBuffers(frame.commandBuffer.get());
-
-    if (platformSurface) {
-        submitInfo.setSignalSemaphores(frame.frameSemaphore.get())
-            .setWaitSemaphores(frame.surfaceSemaphore.get())
-            .setWaitDstStageMask(waitStageMask);
-    }
+    frame.uploadCommandBuffer->end();
+    frame.primaryCommandBuffer->end();
 
     const vk::Result resetFenceResult = device->resetFences(1, &frame.flightFrameFence.get());
     if (resetFenceResult != vk::Result::eSuccess) {
         mbgl::Log::Error(mbgl::Event::Render, "Reset fence failed");
     }
 
-    graphicsQueue.submit(submitInfo, frame.flightFrameFence.get());
-
-    // present rendered frame
     if (platformSurface) {
+        // submit frame commands
+        const vk::CommandBuffer buffers[] = {frame.uploadCommandBuffer.get(), frame.primaryCommandBuffer.get()};
+        const vk::PipelineStageFlags waitStageMask[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
+        auto submitInfo = vk::SubmitInfo()
+                              .setCommandBuffers(buffers)
+                              .setSignalSemaphores(frame.frameSemaphore.get())
+                              .setWaitSemaphores(frame.surfaceSemaphore.get())
+                              .setWaitDstStageMask(waitStageMask);
+        graphicsQueue.submit(submitInfo, frame.flightFrameFence.get());
+
+        // present rendered frame
         const auto acquiredImage = renderableResource.getAcquiredImageIndex();
         const auto presentInfo = vk::PresentInfoKHR()
                                      .setSwapchains(renderableResource.getSwapchain().get())
@@ -303,8 +340,47 @@ void Context::submitFrame() {
 }
 
 std::unique_ptr<gfx::CommandEncoder> Context::createCommandEncoder() {
-    const auto& frame = frameResources[frameResourceIndex];
-    return std::make_unique<CommandEncoder>(*this, frame.commandBuffer);
+    return std::make_unique<CommandEncoder>(*this);
+}
+
+std::size_t Context::getThreadIndex(std::int32_t layerIndex, std::int32_t maxLayerIndex) const {
+    return (layerIndex * renderThreadCount) / (maxLayerIndex + 1);
+}
+
+const vk::UniqueCommandBuffer& Context::getSecondaryCommandBuffer(std::size_t threadIndex) {
+    MLN_TRACE_FUNC();
+    auto& frame = frameResources[frameResourceIndex];
+
+    assert(0 <= threadIndex && threadIndex < renderThreadCount);
+    auto& buffer = frame.secondaryCommandBuffers[threadIndex];
+
+    // Begin the secondary buffer, if we haven't already done so this frame
+    if (!frame.secondaryCommandBufferBegin[threadIndex]) {
+        const auto& renderableResource = backend.getDefaultRenderable().getResource<SurfaceRenderableResource>();
+        const auto& renderPass = renderableResource.getRenderPass();
+        const auto& frameBuffer = renderableResource.getFramebuffer();
+        const auto inheritInfo = vk::CommandBufferInheritanceInfo{renderPass.get(), 0, frameBuffer.get()};
+        buffer->reset(vk::CommandBufferResetFlagBits::eReleaseResources);
+        buffer->begin(vk::CommandBufferBeginInfo{vk::CommandBufferUsageFlagBits::eRenderPassContinue, &inheritInfo});
+        frame.secondaryCommandBufferBegin[threadIndex] = true;
+    }
+    return buffer;
+}
+
+void Context::endEncoding() {
+    auto& frame = frameResources[frameResourceIndex];
+
+    // Encode each secondary buffer into the primary
+    for (auto threadIndex = 0_uz; threadIndex < renderThreadCount; ++threadIndex) {
+        auto& buffer = frame.secondaryCommandBuffers[threadIndex];
+        if (buffer && frame.secondaryCommandBufferBegin[threadIndex]) {
+            buffer->end();
+            frame.primaryCommandBuffer->executeCommands(buffer.get());
+            frame.secondaryCommandBufferBegin[threadIndex] = false;
+        }
+    }
+
+    frame.primaryCommandBuffer->endRenderPass();
 }
 
 BufferResource Context::createBuffer(const void* data, std::size_t size, std::uint32_t usage, bool persistent) const {
@@ -407,15 +483,18 @@ void Context::clearStencilBuffer(int32_t) {
     assert(false);
 }
 
-void Context::bindGlobalUniformBuffers(gfx::RenderPass& renderPass) const noexcept {
+void Context::bindGlobalUniformBuffers(gfx::RenderPass& renderPass, std::optional<std::size_t> threadIndex) {
     auto& renderPassImpl = static_cast<RenderPass&>(renderPass);
-    const_cast<Context*>(this)->globalUniformBuffers.bindDescriptorSets(renderPassImpl.getEncoder());
+    globalUniformBuffers.bindDescriptorSets(renderPassImpl.getEncoder(), threadIndex);
 }
 
-bool Context::renderTileClippingMasks(gfx::RenderPass& renderPass,
+bool Context::renderTileClippingMasks(std::optional<std::size_t> threadIndex,
+                                      gfx::RenderPass& renderPass,
                                       RenderStaticData& staticData,
                                       const std::vector<shaders::ClipUBO>& tileUBOs) {
     using ShaderClass = shaders::ShaderSource<shaders::BuiltIn::ClippingMaskProgram, gfx::Backend::Type::Vulkan>;
+
+    std::unique_lock lock{clippingMutex};
 
     if (!clipping.shader) {
         const auto group = staticData.shaders->getShaderGroup("ClippingMaskProgram");
@@ -474,15 +553,18 @@ bool Context::renderTileClippingMasks(gfx::RenderPass& renderPass,
 
     auto& shaderImpl = static_cast<ShaderProgram&>(*clipping.shader);
     auto& renderPassImpl = static_cast<RenderPass&>(renderPass);
-    auto& commandBuffer = renderPassImpl.getEncoder().getCommandBuffer();
+    auto& commandBuffer = renderPassImpl.getEncoder().getCommandBuffer(threadIndex);
 
     clipping.pipelineInfo.setRenderable(renderPassImpl.getDescriptor().renderable);
 
-    const auto& pipeline = shaderImpl.getPipeline(clipping.pipelineInfo);
+    const auto& pipeline = shaderImpl.getPipeline(clipping.pipelineInfo, threadIndex);
 
     commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.get());
     clipping.pipelineInfo.setDynamicValues(backend, commandBuffer);
 
+    lock.unlock();
+
+    assert(clipping.vertexBuffer->getVulkanBuffer());
     const std::array<vk::Buffer, 1> vertexBuffers = {clipping.vertexBuffer->getVulkanBuffer()};
     const std::array<vk::DeviceSize, 1> offset = {0};
 
@@ -546,7 +628,7 @@ void Context::buildUniformDescriptorSetLayout(vk::UniqueDescriptorSetLayout& lay
 
     for (size_t i = 0; i < uniformCount; ++i) {
         bindings.push_back(vk::DescriptorSetLayoutBinding()
-                               .setBinding(i)
+                               .setBinding(static_cast<uint32_t>(i))
                                .setStageFlags(stageFlags)
                                .setDescriptorType(vk::DescriptorType::eUniformBuffer)
                                .setDescriptorCount(1));
@@ -595,13 +677,15 @@ const vk::DescriptorSetLayout& Context::getDescriptorSetLayout(DescriptorSetType
     }
 }
 
-DescriptorPoolGrowable& Context::getDescriptorPool(DescriptorSetType type) {
+DescriptorPoolGrowable& Context::getDescriptorPool(DescriptorSetType type, std::optional<std::size_t> threadIndex) {
     assert(static_cast<uint32_t>(type) < static_cast<uint32_t>(DescriptorSetType::Count));
-    return descriptorPoolMap[type];
+    return descriptorPoolMaps[threadIndex ? *threadIndex + 1 : 0][type];
 }
 
 const vk::UniquePipelineLayout& Context::getGeneralPipelineLayout() {
-    if (generalPipelineLayout) return generalPipelineLayout;
+    if (generalPipelineLayout) {
+        return generalPipelineLayout;
+    }
 
     const std::vector<vk::DescriptorSetLayout> layouts = {
         globalUniformDescriptorSetLayout.get(),
@@ -619,7 +703,9 @@ const vk::UniquePipelineLayout& Context::getGeneralPipelineLayout() {
 }
 
 const vk::UniquePipelineLayout& Context::getPushConstantPipelineLayout() {
-    if (pushConstantPipelineLayout) return pushConstantPipelineLayout;
+    if (pushConstantPipelineLayout) {
+        return pushConstantPipelineLayout;
+    }
 
     const auto stages = vk::ShaderStageFlags() | vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
     const auto pushConstant = vk::PushConstantRange().setSize(sizeof(matf4)).setStageFlags(stages);
@@ -635,8 +721,9 @@ const vk::UniquePipelineLayout& Context::getPushConstantPipelineLayout() {
 void Context::FrameResources::runDeletionQueue(Context& context) {
     MLN_TRACE_FUNC();
 
-    for (const auto& function : deletionQueue) function(context);
-
+    for (const auto& function : deletionQueue) {
+        function(context);
+    }
     deletionQueue.clear();
 }
 

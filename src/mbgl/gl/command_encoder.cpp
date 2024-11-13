@@ -12,7 +12,7 @@ namespace mbgl {
 namespace gl {
 
 CommandEncoder::~CommandEncoder() {
-    const auto debugGroup(createDebugGroup("cleanup"));
+    const auto debugGroup = createDebugGroup({}, "cleanup");
     context.performCleanup();
 }
 
@@ -29,7 +29,7 @@ void CommandEncoder::present(gfx::Renderable& renderable) {
     renderable.getResource<gl::RenderableResource>().swap();
 }
 
-void CommandEncoder::pushDebugGroup(const char* name) {
+void CommandEncoder::pushDebugGroup(std::optional<std::size_t>, const char* name) {
     (void)name;
 #ifndef NDEBUG
     if (auto debugging = context.getDebuggingExtension()) {
@@ -43,7 +43,7 @@ void CommandEncoder::pushDebugGroup(const char* name) {
 #endif
 }
 
-void CommandEncoder::popDebugGroup() {
+void CommandEncoder::popDebugGroup(std::optional<std::size_t>) {
 #ifndef NDEBUG
     if (auto debugging = context.getDebuggingExtension()) {
         if (debugging->popDebugGroup) {

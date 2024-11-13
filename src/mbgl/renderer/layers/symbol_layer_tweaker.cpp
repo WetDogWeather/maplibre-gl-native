@@ -75,7 +75,7 @@ void SymbolLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParamete
 
 #if !defined(NDEBUG)
     const auto label = layerGroup.getName() + "-update-uniforms";
-    const auto debugGroup = parameters.encoder->createDebugGroup(label.c_str());
+    const auto debugGroup = parameters.getEncoder()->createDebugGroup(parameters.renderThreadIndex, label);
 #endif
 
     const auto zoom = static_cast<float>(state.getZoom());
@@ -97,7 +97,7 @@ void SymbolLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParamete
         propertiesUpdated = false;
     }
     auto& layerUniforms = layerGroup.mutableUniformBuffers();
-    layerUniforms.set(idSymbolEvaluatedPropsUBO, evaluatedPropsUniformBuffer);
+    layerUniforms.set(idSymbolEvaluatedPropsUBO, evaluatedPropsUniformBuffer, parameters.renderThreadIndex);
 
     const auto getInterpUBO =
         [&](const UnwrappedTileID& tileID, bool isText, const SymbolBucket::PaintProperties& paintProps) {
@@ -198,9 +198,10 @@ void SymbolLayerTweaker::execute(LayerGroupBase& layerGroup, const PaintParamete
         };
 
         auto& drawableUniforms = drawable.mutableUniformBuffers();
-        drawableUniforms.createOrUpdate(idSymbolDrawableUBO, &drawableUBO, context);
-        drawableUniforms.createOrUpdate(idSymbolTilePropsUBO, &tileUBO, context);
-        drawableUniforms.set(idSymbolInterpolateUBO, getInterpUBO(tileID, isText, paintProperties));
+        drawableUniforms.createOrUpdate(idSymbolDrawableUBO, &drawableUBO, context, parameters.renderThreadIndex);
+        drawableUniforms.createOrUpdate(idSymbolTilePropsUBO, &tileUBO, context, parameters.renderThreadIndex);
+        drawableUniforms.set(
+            idSymbolInterpolateUBO, getInterpUBO(tileID, isText, paintProperties), parameters.renderThreadIndex);
     });
 
     // Regularly remove UBOs which are not being updated
