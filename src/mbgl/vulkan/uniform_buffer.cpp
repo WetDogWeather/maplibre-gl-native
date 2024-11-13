@@ -59,7 +59,7 @@ void UniformBufferArray::init(gfx::Context& context, std::size_t threadCount) {
 
 const std::shared_ptr<gfx::UniformBuffer>& UniformBufferArray::set(const std::size_t id,
                                                                    std::shared_ptr<gfx::UniformBuffer> uniformBuffer,
-                                                                   std::optional<std::size_t> threadIndex) {
+                                                                   std::optional<std::size_t> /*threadIndex*/) {
     if (id >= uniformBufferVector.size()) {
         return nullref;
     }
@@ -69,7 +69,9 @@ const std::shared_ptr<gfx::UniformBuffer>& UniformBufferArray::set(const std::si
     }
 
     if (descriptorSet) {
-        descriptorSet->markDirty(threadIndex);
+        // We assume that this object is only used by one thread at a time, e.g., shared only within a layer
+        // TODO: How to validate that?
+        descriptorSet->markDirty(DescriptorSet::AllThreads);
     }
 
     uniformBufferVector[id] = std::move(uniformBuffer);

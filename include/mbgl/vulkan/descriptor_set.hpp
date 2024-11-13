@@ -57,6 +57,11 @@ public:
     void allocate(std::optional<std::size_t> threadIndex);
 
     void markDirty(std::optional<std::size_t> threadIndex, bool value = true);
+
+    struct AllThreadsTag {};
+    static constexpr AllThreadsTag AllThreads;
+    void markDirty(AllThreadsTag, bool value = true);
+
     void bind(CommandEncoder&, std::optional<std::size_t> threadIndex);
 
 protected:

@@ -63,10 +63,11 @@ static RENDERDOC_API_1_1_2* g_rdoc_api = nullptr;
 namespace mbgl {
 namespace vulkan {
 
+namespace {
 template <typename T, typename F>
-static bool checkAvailability(const std::vector<T>& availableValues,
-                              const std::vector<const char*>& requiredValues,
-                              const F& getter) {
+bool checkAvailability(const std::vector<T>& availableValues,
+                       const std::vector<const char*>& requiredValues,
+                       const F& getter) {
     for (const auto& requiredValue : requiredValues) {
         bool found = false;
         for (const auto& availableValue : availableValues) {
@@ -82,14 +83,13 @@ static bool checkAvailability(const std::vector<T>& availableValues,
     return true;
 }
 
-namespace {
-constexpr auto renderThreadCount = 2;
+constexpr auto renderThreadCount = 3;
 }
 
 RendererBackend::RendererBackend(const gfx::ContextMode contextMode_)
     : gfx::RendererBackend(contextMode_),
       allocator(nullptr) {
-    if (renderThreadCount) {
+    if constexpr (renderThreadCount) {
         renderThreadScheduler.emplace(renderThreadCount, "Render");
     }
 }
@@ -259,7 +259,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vkDebugUtilsCallback(VkDebugUtilsMessageSeverityF
         return VK_FALSE;
     }
 
-    mbgl::Log::Record(getSeverity(messageSeverity), mbgl::Event::Render, callbackData->pMessage);
+    const auto* msg = callbackData ? callbackData->pMessage : "(none)";
+    mbgl::Log::Record(getSeverity(messageSeverity), mbgl::Event::Render, msg);
 
     return VK_FALSE;
 }
@@ -475,8 +476,8 @@ void RendererBackend::initDevice() {
 
             if (queue.queueCount == 0) continue;
 
-            if (queue.queueFlags & vk::QueueFlagBits::eGraphics) graphicsQueueIndex = i;
-            if (surface && candidate.getSurfaceSupportKHR(i, surface)) presentQueueIndex = i;
+            if (queue.queueFlags & vk::QueueFlagBits::eGraphics) graphicsQueueIndex = static_cast<std::int32_t>(i);
+            if (surface && candidate.getSurfaceSupportKHR(i, surface)) presentQueueIndex = static_cast<std::int32_t>(i);
 
             if (graphicsQueueIndex != -1 && (!surface || presentQueueIndex != -1)) break;
         }
@@ -596,17 +597,18 @@ void RendererBackend::destroyResources() {
     instance.reset();
 }
 
+namespace {
 /// @brief Register a list of types with a shader registry instance
 /// @tparam ...ShaderID Pack of BuiltIn:: shader IDs
 /// @param registry A shader registry instance
 /// @param programParameters ProgramParameters used to initialize each instance
 template <shaders::BuiltIn... ShaderID>
-void registerTypes(gfx::ShaderRegistry& registry, const ProgramParameters& programParameters) {
-    /// The following fold expression will create a shader for every type
-    /// in the parameter pack and register it with the shader registry.
+void registerTypes([[maybe_unused]] gfx::ShaderRegistry& registry, const ProgramParameters& programParameters) {
+    // The following fold expression will create a shader for every type
+    // in the parameter pack and register it with the shader registry.
 
     // Registration calls are wrapped in a lambda that throws on registration
-    // failure, we shouldn't expect registration to faill unless the shader
+    // failure, we shouldn't expect registration to fail unless the shader
     // registry instance provided already has conflicting programs present.
     (
         [&]() {
@@ -619,6 +621,7 @@ void registerTypes(gfx::ShaderRegistry& registry, const ProgramParameters& progr
             }
         }(),
         ...);
+}
 }
 
 void RendererBackend::initShaders(gfx::ShaderRegistry& shaders, const ProgramParameters& programParameters) {

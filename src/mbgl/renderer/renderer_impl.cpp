@@ -67,7 +67,7 @@ Renderer::Impl::Impl(gfx::RendererBackend& backend_,
 
 Renderer::Impl::~Impl() {
     assert(gfx::BackendScope::exists());
-};
+}
 
 void Renderer::Impl::onPreCompileShader(shaders::BuiltIn shaderID,
                                         gfx::Backend::Type type,

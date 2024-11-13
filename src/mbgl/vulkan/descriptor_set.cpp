@@ -131,6 +131,12 @@ void DescriptorSet::markDirty(std::optional<std::size_t> threadIndex, bool value
     std::fill(thread.dirty.begin(), thread.dirty.end(), value);
 }
 
+void DescriptorSet::markDirty(AllThreadsTag, bool value) {
+    for (auto i = 0_uz; i <= threadCount; ++i) {
+        markDirty(i ? i - 1 : std::optional<std::size_t>{}, value);
+    }
+}
+
 void DescriptorSet::bind(CommandEncoder&, std::optional<std::size_t> threadIndex) {
     MLN_TRACE_FUNC();
     auto& commandBuffer = context.getCommandBuffer(threadIndex);
