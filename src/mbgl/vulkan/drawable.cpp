@@ -451,7 +451,7 @@ bool Drawable::bindDescriptors(CommandEncoder& encoder,
             if (!texture) continue;
             const auto textureImpl = static_cast<const Texture2D*>(texture.get());
             if (textureImpl && textureImpl->isDirty()) {
-                impl->imageDescriptorSet->markDirty(true);
+                impl->imageDescriptorSet->markDirty(DescriptorSet::AllThreads);
                 break;
             }
         }
