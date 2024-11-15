@@ -31,14 +31,6 @@ public:
     /// @param fn Task to run
     void schedule(const util::SimpleIdentity tag, std::function<void()>&& fn) override;
 
-    /// @brief Schedule a task assigned to the given owner `tag` on a specific thread.
-    /// @param threadIndex The thread to run on
-    /// @param tag Identifier object to indicate ownership of `fn`
-    /// @param fn Task to run
-    void schedule(std::optional<std::size_t> threadIndex,
-                  const util::SimpleIdentity tag,
-                  std::function<void()>&& fn) override;
-
     /// @brief Set the prefix used for thread names
     void setName(std::string str) { schedulerName = std::move(str); }
 
@@ -48,12 +40,11 @@ public:
 protected:
     ThreadedSchedulerBase(std::size_t threadCount_, std::string name_)
         : threadCount(threadCount_),
-          taskCounts(threadCount_ + 1),
           schedulerName(std::move(name_)) {
 #ifdef MLN_TRACY_ENABLE
-        auto lockName = schedulerName + " worker";
+        auto lockName = schedulerName + util::toString(uniqueID) + " worker";
         MLN_LOCK_NAME_STR(workerMutex, lockName);
-        lockName = schedulerName + " queue";
+        lockName = schedulerName + util::toString(uniqueID) + " tagq";
         MLN_LOCK_NAME_STR(taggedQueueMutex, lockName);
 #endif
     }
@@ -71,17 +62,12 @@ protected:
     /// Returns true if called from a thread managed by the scheduler
     bool thisThreadIsOwned() const { return owningThreadPool.get() == this; }
 
-    // Convert from optional thread index to index in an collection for main+threads
-    static std::size_t queueIndexFor(std::optional<std::size_t> threadIndex) {
-        return threadIndex ? *threadIndex + 1 : 0;
-    }
-
     // Signal when an item is added to the queue
     MLN_TRACE_CONDITION_VAR cvAvailable;
     MLN_TRACE_LOCKABLE(std::mutex, workerMutex);
     MLN_TRACE_LOCKABLE(std::mutex, taggedQueueMutex);
     util::ThreadLocal<ThreadedSchedulerBase> owningThreadPool;
-    std::vector<std::atomic<std::uint32_t>> taskCounts;
+    std::atomic<std::uint32_t> taskCount{0};
     std::string schedulerName;
     bool terminated{false};
 
@@ -89,15 +75,12 @@ protected:
 
     // Task queues bucketed by tag address
     struct Queue {
-        Queue(std::size_t threadCount)
-            : queues(threadCount) {}
-
         std::atomic<std::size_t> runningCount; /* running tasks */
         MLN_TRACE_CONDITION_VAR cv;            /* queue empty condition */
         MLN_TRACE_LOCKABLE(std::mutex, mutex); /* lock */
-        std::vector<TaskQueue> queues;         /* queues for general and thread-specific tasks */
+        TaskQueue queue;                       /* queue for tasks */
 
-        bool empty() const { return std::ranges::all_of(queues, &queueEmpty); }
+        bool empty() const { return queue.empty(); }
         static bool queueEmpty(TaskQueue q) { return q.empty(); }
     };
     mbgl::unordered_map<util::SimpleIdentity, std::shared_ptr<Queue>> taggedQueue;
@@ -141,7 +124,7 @@ public:
                 // new entry added
                 result.first->second = std::make_shared<RenderQueue>();
 #ifdef MLN_TRACY_ENABLE
-                auto lockName = schedulerName + " rqueue " + util::toString(tag);
+                auto lockName = schedulerName + util::toString(uniqueID) + " renderq" + util::toString(tag);
                 MLN_LOCK_NAME_STR(result.first->second->mutex, lockName);
 #endif
             }

@@ -9,12 +9,6 @@
 
 namespace mbgl {
 
-#ifndef NDEBUG
-namespace {
-constexpr auto MaxTasks = 1u << 20;
-}
-#endif
-
 ThreadedSchedulerBase::~ThreadedSchedulerBase() = default;
 
 void ThreadedSchedulerBase::terminate() {
@@ -35,18 +29,12 @@ std::thread ThreadedSchedulerBase::makeSchedulerThread(const size_t threadIndex)
             platform::setCurrentThreadPriority(*priority);
         }
 
-        const auto name = schedulerName + util::toString(threadIndex + 1);
+        const auto name = schedulerName + util::toString(uniqueID) + " " + util::toString(threadIndex + 1);
         platform::setCurrentThreadName(name);
         MLN_TRACE_THREAD_NAME_HINT_STR(name, uniqueID.id());
         platform::attachThread();
 
         owningThreadPool.set(this);
-
-        const auto threadQueueIndex = queueIndexFor(threadIndex);
-        const auto generalQueueIndex = queueIndexFor({});
-
-        auto& generalTaskCount = taskCounts[generalQueueIndex];
-        auto& threadTaskCount = taskCounts[threadQueueIndex];
 
         std::vector<std::shared_ptr<Queue>> pending;
 
@@ -56,7 +44,7 @@ std::thread ThreadedSchedulerBase::makeSchedulerThread(const size_t threadIndex)
                 std::unique_lock conditionLock{workerMutex};
 
                 // Wait for things this thread can do, or for a notification to shut down
-                cvAvailable.wait(conditionLock, [&] { return terminated || generalTaskCount || threadTaskCount; });
+                cvAvailable.wait(conditionLock, [&] { return terminated || taskCount; });
 
                 if (terminated) {
                     platform::detachThread();
@@ -77,24 +65,14 @@ std::thread ThreadedSchedulerBase::makeSchedulerThread(const size_t threadIndex)
                 {
                     MLN_TRACE_ZONE(pop);
                     std::lock_guard lock{q->mutex};
-                    auto& generalQueue = q->queues[generalQueueIndex];
-                    auto& threadQueue = q->queues[threadQueueIndex];
 
-                    if (!threadQueue.empty()) {
+                    if (!q->empty()) {
                         // There's a thread-specific task pending
-                        tasklet = std::move(threadQueue.front());
-                        threadQueue.pop();
+                        tasklet = std::move(q->queue.front());
+                        q->queue.pop();
                         assert(tasklet);
-                        --threadTaskCount;
-                        [[maybe_unused]] const auto newCount = threadTaskCount.load();
-                        assert(newCount < MaxTasks);
-                    } else if (!generalQueue.empty()) {
-                        // There's a generic task pending
-                        tasklet = std::move(generalQueue.front());
-                        generalQueue.pop();
-                        assert(tasklet);
-                        [[maybe_unused]] const auto newCount = --generalTaskCount;
-                        assert(newCount < MaxTasks);
+                        [[maybe_unused]] const auto newCount = static_cast<std::ptrdiff_t>(--taskCount);
+                        assert(0 <= newCount);
                     }
                     if (tasklet) {
                         ++q->runningCount;
@@ -145,23 +123,16 @@ std::thread ThreadedSchedulerBase::makeSchedulerThread(const size_t threadIndex)
 }
 
 void ThreadedSchedulerBase::schedule(std::function<void()>&& fn) {
-    schedule({}, uniqueID, std::move(fn));
+    schedule(uniqueID, std::move(fn));
 }
 
-void ThreadedSchedulerBase::schedule(const util::SimpleIdentity tag, std::function<void()>&& fn) {
-    schedule({}, tag, std::move(fn));
-}
-
-void ThreadedSchedulerBase::schedule(std::optional<std::size_t> threadIndex,
-                                     util::SimpleIdentity tag,
+void ThreadedSchedulerBase::schedule(util::SimpleIdentity tag,
                                      std::function<void()>&& fn) {
     MLN_TRACE_FUNC();
     assert(fn);
     if (!fn) return;
 
     tag = tag.isEmpty() ? uniqueID : tag;
-
-    const auto queueIndex = queueIndexFor(threadIndex);
 
     std::shared_ptr<Queue> q;
     {
@@ -174,7 +145,7 @@ void ThreadedSchedulerBase::schedule(std::optional<std::size_t> threadIndex,
             // new entry inserted, create the bucket for it
             result.first->second = std::make_shared<Queue>(threadCount + 1);
 #ifdef MLN_TRACY_ENABLE
-            const auto lockName = schedulerName + " queue " + util::toString(tag);
+            const auto lockName = schedulerName + util::toString(uniqueID) + " queue" + util::toString(tag);
             MLN_LOCK_NAME_STR(result.first->second->mutex, lockName);
 #endif
         }
@@ -184,21 +155,19 @@ void ThreadedSchedulerBase::schedule(std::optional<std::size_t> threadIndex,
     {
         MLN_TRACE_ZONE(push);
         std::lock_guard lock{q->mutex};
-        q->queues[queueIndex].push(std::move(fn));
 
-        [[maybe_unused]] const auto newCount = ++taskCounts[queueIndex];
+        [[maybe_unused]] const auto newCount = static_cast<std::ptrdiff_t>(++taskCount);
         assert(newCount > 0);
         MLN_ZONE_VALUE(newCount);
+
+        q->queue.push(std::move(fn));
     }
 
     // Take the worker lock before notifying to prevent threads from waiting while we try to wake them
     {
+        MLN_TRACE_ZONE(notify);
         std::lock_guard workerLock{workerMutex};
-        if (threadIndex) {
-            cvAvailable.notify_all();
-        } else {
-            cvAvailable.notify_one();
-        }
+        cvAvailable.notify_one();
     }
 }
 

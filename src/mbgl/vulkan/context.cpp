@@ -76,21 +76,25 @@ void Context::initFrameResources() {
     const auto& device = backend.getDevice();
     const auto frameCount = backend.getMaxFrames();
 
+    // Reduce the pool sizes somewhat when using multiple threads
+    const std::uint32_t poolSizeMultiplier = renderThreadCount ? 2 : 1;
+    const std::uint32_t poolSizeDivisor = renderThreadCount ? renderThreadCount : 1;
+
     // One set of descriptor pools for the primary render thread, and one for each secondary render thread
     for (auto i = 0_uz; i <= renderThreadCount; ++i) {
         auto& map = descriptorPoolMaps[i];
 
         map.reserve(underlying_type(DescriptorSetType::Count));
         map.emplace(DescriptorSetType::Global,
-                    DescriptorPoolGrowable{globalDescriptorPoolSize, static_cast<uint32_t>(globalUBOCount)});
+                    DescriptorPoolGrowable{globalDescriptorPoolSize * poolSizeMultiplier / poolSizeDivisor, static_cast<uint32_t>(globalUBOCount)});
         map.emplace(DescriptorSetType::Layer,
-                    DescriptorPoolGrowable{layerDescriptorPoolSize, static_cast<uint32_t>(maxUBOCountPerLayer)});
+                    DescriptorPoolGrowable{layerDescriptorPoolSize * poolSizeMultiplier / poolSizeDivisor, static_cast<uint32_t>(maxUBOCountPerLayer)});
         map.emplace(
             DescriptorSetType::DrawableUniform,
-            DescriptorPoolGrowable{drawableUniformDescriptorPoolSize, static_cast<uint32_t>(maxUBOCountPerDrawable)});
+            DescriptorPoolGrowable{drawableUniformDescriptorPoolSize * poolSizeMultiplier / poolSizeDivisor, static_cast<uint32_t>(maxUBOCountPerDrawable)});
         map.emplace(
             DescriptorSetType::DrawableImage,
-            DescriptorPoolGrowable{drawableImageDescriptorPoolSize, static_cast<uint32_t>(maxTextureCountPerShader)});
+            DescriptorPoolGrowable{drawableImageDescriptorPoolSize * poolSizeMultiplier / poolSizeDivisor, static_cast<uint32_t>(maxTextureCountPerShader)});
     }
 
     // command buffers

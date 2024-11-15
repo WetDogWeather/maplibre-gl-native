@@ -114,6 +114,7 @@ ShaderProgram::~ShaderProgram() noexcept = default;
 
 const vk::UniquePipeline& ShaderProgram::getPipeline(const PipelineInfo& pipelineInfo,
                                                      std::optional<std::size_t> threadIndex) {
+    MLN_TRACE_FUNC();
     auto& pipeline = pipelines[threadIndex ? *threadIndex + 1 : 0];
     if (pipeline) {
         return pipeline;

@@ -95,10 +95,10 @@ public:
     void eachThread(Func f, const util::SimpleIdentity tag = util::SimpleIdentity::Empty) {
         MLN_TRACE_FUNC();
         const auto threadCount = getThreadCount();
-        assert(threadCount <= std::latch::max());
-        std::latch latch(threadCount);
+        assert(0 < threadCount && threadCount <= std::latch::max());
+        std::latch latch(static_cast<std::ptrdiff_t>(threadCount));
         for (auto threadIndex = 0_uz; threadIndex < threadCount; ++threadIndex) {
-            schedule(threadIndex, tag, [&, threadIndex] {
+            schedule(tag, [&, threadIndex] {
                 MLN_TRACE_ZONE(task);
                 MLN_ZONE_VALUE(threadIndex);
                 try {

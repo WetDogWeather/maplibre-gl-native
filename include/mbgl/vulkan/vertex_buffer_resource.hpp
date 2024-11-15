@@ -27,7 +27,7 @@ public:
 
 protected:
     BufferResource buffer;
-    std::chrono::duration<double> lastUpdated;
+    std::chrono::duration<double> lastUpdated = std::chrono::duration<double>::zero();
 };
 
 using UniqueVertexBufferResource = std::unique_ptr<VertexBufferResource>;
