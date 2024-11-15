@@ -195,10 +195,12 @@ public:
 
     /// Set vertex attribute array
     void setVertexAttributes(gfx::VertexAttributeArrayPtr value) noexcept {
-        vertexAttributes = std::move(value);
-        // The attribute bindings need to be rebuilt, we can't rely on the update
-        // time check as these new values may not have been modified recently.
-        attributeUpdateTime.reset();
+        if (value != vertexAttributes) {
+            vertexAttributes = std::move(value);
+            // The attribute bindings need to be rebuilt, we can't rely on the update
+            // time check as these new values may not have been modified recently.
+            attributeUpdateTime.reset();
+        }
     }
 
     /// Update vertices, indices, and segments
