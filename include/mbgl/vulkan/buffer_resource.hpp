@@ -50,6 +50,8 @@ public:
 
     void update(const void* data, std::size_t size, std::size_t offset) noexcept;
 
+    void release(std::optional<std::size_t> threadIndex);
+
     std::size_t getSizeInBytes() const noexcept { return size; }
     const void* contents() const noexcept { return (raw.empty() ? nullptr : raw.data()); }
 

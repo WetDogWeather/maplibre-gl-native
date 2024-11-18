@@ -20,9 +20,9 @@ public:
 private:
     void transition(const TransitionParameters&) override;
     void evaluate(const PropertyEvaluationParameters&) override;
-    bool hasTransition() const override;
-    bool hasCrossfade() const override;
-    bool is3D() const override;
+    bool hasTransition() const noexcept override;
+    bool hasCrossfade() const noexcept override;
+    bool is3D() const noexcept override;
 
 #if MLN_LEGACY_RENDERER
     void render(PaintParameters&) override;

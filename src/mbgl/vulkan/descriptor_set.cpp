@@ -24,7 +24,7 @@ DescriptorSet::DescriptorSet(Context& context_, DescriptorSetType type_, std::si
       threads(threadCount + 1) {}
 
 DescriptorSet::~DescriptorSet() {
-    context.enqueueDeletion([type_ = type, threads_ = std::move(threads)](auto& context_) mutable {
+    context.enqueueDeletion({}, [type_ = type, threads_ = std::move(threads)](auto& context_) mutable {
         [[maybe_unused]] auto& device = context_.getBackend().getDevice();
         for (auto i = 0_uz; i < threads_.size(); ++i) {
             const auto& thread = threads_[i];
@@ -226,7 +226,7 @@ void ImageDescriptorSet::update(const std::array<gfx::Texture2DPtr, shaders::max
 
     for (size_t id = 0; id < shaders::maxTextureCountPerShader; ++id) {
         const auto& texture = id < textures.size() ? textures[id] : nullptr;
-        auto& textureImpl = texture ? static_cast<Texture2D&>(*texture) : *context.getDummyTexture();
+        auto& textureImpl = texture ? static_cast<Texture2D&>(*texture) : *context.getDummyTexture(threadIndex);
 
         const auto descriptorImageInfo = vk::DescriptorImageInfo()
                                              .setImageLayout(textureImpl.getVulkanImageLayout())

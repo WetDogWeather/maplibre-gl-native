@@ -56,7 +56,7 @@ private:
     std::optional<ImagePosition> getPattern(const std::string&) const override;
     const LayerRenderData* getLayerRenderData(const style::Layer::Impl&) const override;
     Bucket* getBucket(const style::Layer::Impl&) const override;
-    void upload(gfx::UploadPass&) override;
+    void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex) override;
     void prepare(const SourcePrepareParameters&) override;
 
     std::shared_ptr<GeometryTile::LayoutResult> layoutResult;
@@ -78,14 +78,14 @@ std::optional<ImagePosition> GeometryTileRenderData::getPattern(const std::strin
     return std::nullopt;
 }
 
-void GeometryTileRenderData::upload(gfx::UploadPass& uploadPass) {
+void GeometryTileRenderData::upload(gfx::UploadPass& uploadPass, std::optional<std::size_t> threadIndex) {
     MLN_TRACE_FUNC();
 
     if (!layoutResult) return;
 
     auto uploadFn = [&](Bucket& bucket) {
         if (bucket.needsUpload()) {
-            bucket.upload(uploadPass);
+            bucket.upload(uploadPass, threadIndex);
         }
     };
 
@@ -100,7 +100,7 @@ void GeometryTileRenderData::upload(gfx::UploadPass& uploadPass) {
         atlasTextures->glyph = uploadPass.getContext().createTexture2D();
         atlasTextures->glyph->setSamplerConfiguration(
             {gfx::TextureFilterType::Linear, gfx::TextureWrapType::Clamp, gfx::TextureWrapType::Clamp});
-        atlasTextures->glyph->upload(*layoutResult->glyphAtlasImage);
+        atlasTextures->glyph->upload(*layoutResult->glyphAtlasImage, threadIndex);
 #else
         atlasTextures->glyph = uploadPass.createTexture(*layoutResult->glyphAtlasImage);
 #endif
@@ -110,7 +110,7 @@ void GeometryTileRenderData::upload(gfx::UploadPass& uploadPass) {
     if (layoutResult->iconAtlas.image.valid()) {
 #if MLN_DRAWABLE_RENDERER
         atlasTextures->icon = uploadPass.getContext().createTexture2D();
-        atlasTextures->icon->upload(layoutResult->iconAtlas.image);
+        atlasTextures->icon->upload(layoutResult->iconAtlas.image, threadIndex);
 #else
         atlasTextures->icon = uploadPass.createTexture(layoutResult->iconAtlas.image);
 #endif
@@ -122,7 +122,8 @@ void GeometryTileRenderData::upload(gfx::UploadPass& uploadPass) {
 #if MLN_DRAWABLE_RENDERER
             atlasTextures->icon->uploadSubRegion(imagePatch.image->image,
                                                  imagePatch.paddedRect.x + ImagePosition::padding,
-                                                 imagePatch.paddedRect.y + ImagePosition::padding);
+                                                 imagePatch.paddedRect.y + ImagePosition::padding,
+                                                 threadIndex);
 #else
             uploadPass.updateTextureSub(*atlasTextures->icon,
                                         imagePatch.image->image,

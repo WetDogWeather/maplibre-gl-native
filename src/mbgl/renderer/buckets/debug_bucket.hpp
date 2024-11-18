@@ -22,7 +22,7 @@ public:
                 std::optional<Timestamp> expires,
                 MapDebugOptions);
 
-    void upload(gfx::UploadPass&);
+    void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex);
 
     const bool renderable;
     const bool complete;

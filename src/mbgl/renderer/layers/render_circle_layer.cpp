@@ -95,11 +95,11 @@ void RenderCircleLayer::evaluate(const PropertyEvaluationParameters& parameters)
 #endif // MLN_DRAWABLE_RENDERER
 }
 
-bool RenderCircleLayer::hasTransition() const {
+bool RenderCircleLayer::hasTransition() const noexcept {
     return unevaluated.hasTransition();
 }
 
-bool RenderCircleLayer::hasCrossfade() const {
+bool RenderCircleLayer::hasCrossfade() const noexcept {
     return false;
 }
 

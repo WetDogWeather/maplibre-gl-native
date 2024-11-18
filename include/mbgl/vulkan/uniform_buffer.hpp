@@ -16,6 +16,8 @@ public:
 
     const BufferResource& getBufferResource() const { return buffer; }
 
+    void releaseResource(std::optional<std::size_t> threadIndex);
+
     UniformBuffer clone() const { return {buffer.clone()}; }
 
     void update(const void* data, std::size_t size_) override;

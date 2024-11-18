@@ -142,7 +142,7 @@ public:
 
     const std::unique_ptr<BufferResource>& getDummyVertexBuffer();
     const std::unique_ptr<BufferResource>& getDummyUniformBuffer();
-    const std::unique_ptr<Texture2D>& getDummyTexture();
+    const std::unique_ptr<Texture2D>& getDummyTexture(std::optional<std::size_t> threadIndex);
 
     const vk::DescriptorSetLayout& getDescriptorSetLayout(DescriptorSetType type);
     const vk::UniquePipelineLayout& getGeneralPipelineLayout();
@@ -151,7 +151,7 @@ public:
     DescriptorPoolGrowable& getDescriptorPool(DescriptorSetType, std::optional<std::size_t> threadIndex);
 
     uint8_t getCurrentFrameResourceIndex() const { return frameResourceIndex; }
-    void enqueueDeletion(std::function<void(Context&)>&& function);
+    void enqueueDeletion(std::optional<std::size_t> threadIndex, std::function<void(Context&)>&& function);
     void submitOneTimeCommand(const std::function<void(const vk::UniqueCommandBuffer&)>& function) const;
 
     const vk::UniqueCommandBuffer& getPrimaryCommandBuffer() const {
@@ -197,7 +197,8 @@ private:
         vk::UniqueSemaphore frameSemaphore;
         vk::UniqueFence flightFrameFence;
 
-        std::vector<std::function<void(Context&)>> deletionQueue;
+        std::vector<std::queue<std::function<void(Context&)>>> deletionQueue;
+        MLN_TRACE_LOCKABLE(std::mutex, deletionQueueMutex); // protects only element 0
 
         explicit FrameResources(std::size_t threadCount,
                                 vk::UniqueCommandBuffer& pcb,
@@ -211,7 +212,20 @@ private:
               secondaryCommandBufferBegin(threadCount),
               surfaceSemaphore(std::move(surf)),
               frameSemaphore(std::move(frame)),
-              flightFrameFence(std::move(flight)) {}
+              flightFrameFence(std::move(flight)),
+              deletionQueue(threadCount + 1){}
+        FrameResources(FrameResources&& other) :
+         primaryCommandBuffer(std::move(other.primaryCommandBuffer)),
+         uploadCommandBuffer(std::move(other.uploadCommandBuffer)),
+         secondaryCommandBuffers(std::move(other.secondaryCommandBuffers)),
+         secondaryCommandBufferBegin(std::move(other.secondaryCommandBufferBegin)),
+         surfaceSemaphore(std::move(other.surfaceSemaphore)),
+         frameSemaphore(std::move(other.frameSemaphore)),
+         flightFrameFence(std::move(other.flightFrameFence)),
+         deletionQueue(std::move(other.deletionQueue))
+        // not `deletionQueueMutex`
+        {}
+        FrameResources(const FrameResources&) = delete;
 
         void runDeletionQueue(Context&);
     };

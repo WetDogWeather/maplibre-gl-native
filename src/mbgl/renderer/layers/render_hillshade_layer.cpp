@@ -97,11 +97,11 @@ void RenderHillshadeLayer::evaluate(const PropertyEvaluationParameters& paramete
 #endif
 }
 
-bool RenderHillshadeLayer::hasTransition() const {
+bool RenderHillshadeLayer::hasTransition() const noexcept {
     return unevaluated.hasTransition();
 }
 
-bool RenderHillshadeLayer::hasCrossfade() const {
+bool RenderHillshadeLayer::hasCrossfade() const noexcept {
     return false;
 }
 

@@ -128,22 +128,22 @@ void Texture2D::create() noexcept {
     }
 }
 
-void Texture2D::upload() noexcept {
+void Texture2D::upload(std::optional<std::size_t> threadIndex) {
     if (!imageData) return;
 
-    upload(imageData->data.get(), imageData->size);
+    upload(imageData->data.get(), imageData->size, threadIndex);
 
     imageData.reset();
 }
 
-void Texture2D::upload(const void* pixelData, const Size& size_) noexcept {
+void Texture2D::upload(const void* pixelData, const Size& size_, std::optional<std::size_t> threadIndex) {
     setSize(size_);
-    uploadSubRegion(pixelData, size_, 0, 0);
+    uploadSubRegion(pixelData, size_, 0, 0, threadIndex);
 }
 
-void Texture2D::uploadSubRegion(const void* pixelData, const Size& size_, uint16_t xOffset, uint16_t yOffset) noexcept {
+void Texture2D::uploadSubRegion(const void* pixelData, const Size& size_, uint16_t xOffset, uint16_t yOffset, std::optional<std::size_t> threadIndex) {
     if (pixelData && size_.width > 0 && size_.height > 0) {
-        uploadSubRegion(pixelData, size_, xOffset, yOffset, context.getUploadCommandBuffer());
+        uploadSubRegion(pixelData, size_, xOffset, yOffset, context.getUploadCommandBuffer(), threadIndex);
     }
 }
 
@@ -151,7 +151,8 @@ void Texture2D::uploadSubRegion(const void* pixelData,
                                 const Size& size_,
                                 uint16_t xOffset,
                                 uint16_t yOffset,
-                                const vk::UniqueCommandBuffer& commandBuffer) noexcept {
+                                const vk::UniqueCommandBuffer& commandBuffer,
+                                std::optional<std::size_t> threadIndex) {
     if (!pixelData || size_.width == 0 || size_.height == 0) return;
 
     create();
@@ -202,7 +203,7 @@ void Texture2D::uploadSubRegion(const void* pixelData,
 
     enqueueCommands(commandBuffer);
 
-    context.enqueueDeletion([buffAlloc = std::move(bufferAllocation)](auto&) mutable { buffAlloc.reset(); });
+    context.enqueueDeletion(threadIndex, [buffAlloc = std::move(bufferAllocation)](auto&) mutable { buffAlloc.reset(); });
 
     context.renderingStats().numTextureUpdates++;
 }
@@ -393,7 +394,7 @@ void Texture2D::createSampler() {
 
 void Texture2D::destroyTexture() {
     if (imageAllocation) {
-        context.enqueueDeletion([allocation = std::move(imageAllocation)](auto&) mutable { allocation.reset(); });
+        context.enqueueDeletion({}, [allocation = std::move(imageAllocation)](auto&) mutable { allocation.reset(); });
 
         imageLayout = vk::ImageLayout::eUndefined;
     }
@@ -401,7 +402,7 @@ void Texture2D::destroyTexture() {
 
 void Texture2D::destroySampler() {
     if (sampler) {
-        context.enqueueDeletion([sampler_ = std::move(sampler)](auto& context_) mutable {
+        context.enqueueDeletion({}, [sampler_ = std::move(sampler)](auto& context_) mutable {
             context_.getBackend().getDevice()->destroySampler(sampler_);
         });
 

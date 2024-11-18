@@ -50,7 +50,7 @@ public:
     virtual std::optional<ImagePosition> getPattern(const std::string&) const;
     virtual const LayerRenderData* getLayerRenderData(const style::Layer::Impl&) const;
     virtual Bucket* getBucket(const style::Layer::Impl&) const;
-    virtual void upload(gfx::UploadPass&) {}
+    virtual void upload(gfx::UploadPass&, std::optional<std::size_t>) {}
     virtual void prepare(const SourcePrepareParameters&) {}
 
 protected:
@@ -68,8 +68,8 @@ public:
 private:
     // TileRenderData overrides.
     Bucket* getBucket(const style::Layer::Impl&) const override { return bucket ? bucket.get() : nullptr; }
-    void upload(gfx::UploadPass& uploadPass) override {
-        if (bucket) bucket->upload(uploadPass);
+    void upload(gfx::UploadPass& uploadPass, std::optional<std::size_t> threadIndex) override {
+        if (bucket) bucket->upload(uploadPass, threadIndex);
     }
 
     std::shared_ptr<BucketType> bucket;

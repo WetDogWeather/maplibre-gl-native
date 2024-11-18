@@ -32,9 +32,9 @@ public:
                     std::size_t,
                     const CanonicalTileID&) override;
 
-    bool hasData() const override;
+    bool hasData() const noexcept override;
 
-    void upload(gfx::UploadPass&) override;
+    void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex) override;
 
     float getQueryRadius(const RenderLayer&) const override;
 

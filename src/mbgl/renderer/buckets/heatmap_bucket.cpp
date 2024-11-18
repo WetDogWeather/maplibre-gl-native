@@ -25,7 +25,7 @@ HeatmapBucket::~HeatmapBucket() {
     sharedVertices->release();
 }
 
-void HeatmapBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
+void HeatmapBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass, [[maybe_unused]] std::optional<std::size_t> threadIndex) {
 #if MLN_LEGACY_RENDERER
     vertexBuffer = uploadPass.createVertexBuffer(std::move(vertices));
     indexBuffer = uploadPass.createIndexBuffer(std::move(triangles));
@@ -38,7 +38,7 @@ void HeatmapBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
     uploaded = true;
 }
 
-bool HeatmapBucket::hasData() const {
+bool HeatmapBucket::hasData() const noexcept {
     return !segments.empty();
 }
 

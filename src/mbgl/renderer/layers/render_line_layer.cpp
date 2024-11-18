@@ -97,11 +97,11 @@ void RenderLineLayer::evaluate(const PropertyEvaluationParameters& parameters) {
 #endif
 }
 
-bool RenderLineLayer::hasTransition() const {
+bool RenderLineLayer::hasTransition() const noexcept {
     return unevaluated.hasTransition();
 }
 
-bool RenderLineLayer::hasCrossfade() const {
+bool RenderLineLayer::hasCrossfade() const noexcept {
     return getCrossfade<LineLayerProperties>(evaluatedProperties).t != 1;
 }
 

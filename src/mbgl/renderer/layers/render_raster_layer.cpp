@@ -66,11 +66,11 @@ void RenderRasterLayer::evaluate(const PropertyEvaluationParameters& parameters)
 #endif
 }
 
-bool RenderRasterLayer::hasTransition() const {
+bool RenderRasterLayer::hasTransition() const noexcept {
     return unevaluated.hasTransition();
 }
 
-bool RenderRasterLayer::hasCrossfade() const {
+bool RenderRasterLayer::hasCrossfade() const noexcept {
     return false;
 }
 

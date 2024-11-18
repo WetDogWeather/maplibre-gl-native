@@ -142,12 +142,12 @@ const gfx::Texture* RenderTile::getIconAtlasTexture() const {
 }
 #endif
 
-void RenderTile::upload(gfx::UploadPass& uploadPass) const {
+void RenderTile::upload(gfx::UploadPass& uploadPass, std::optional<std::size_t> threadIndex) const {
     assert(renderData);
-    renderData->upload(uploadPass);
+    renderData->upload(uploadPass, threadIndex);
 
     if (debugBucket) {
-        debugBucket->upload(uploadPass);
+        debugBucket->upload(uploadPass, threadIndex);
     }
 }
 

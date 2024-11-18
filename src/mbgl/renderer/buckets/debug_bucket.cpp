@@ -70,7 +70,7 @@ DebugBucket::DebugBucket(const OverscaledTileID& id,
     segments.emplace_back(0, 0, vertices.elements(), indices.elements());
 }
 
-void DebugBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
+void DebugBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass, [[maybe_unused]] std::optional<std::size_t> threadIndex) {
 #if MLN_LEGACY_RENDERER
     if (!vertices.empty()) {
         vertexBuffer = uploadPass.createVertexBuffer(std::move(vertices));

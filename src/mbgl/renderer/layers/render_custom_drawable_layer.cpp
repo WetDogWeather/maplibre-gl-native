@@ -45,10 +45,10 @@ void RenderCustomDrawableLayer::evaluate(const PropertyEvaluationParameters&) {
     // It is fine to not update `evaluatedProperties`, as `baseImpl` should never be updated for this layer.
 }
 
-bool RenderCustomDrawableLayer::hasTransition() const {
+bool RenderCustomDrawableLayer::hasTransition() const noexcept {
     return false;
 }
-bool RenderCustomDrawableLayer::hasCrossfade() const {
+bool RenderCustomDrawableLayer::hasCrossfade() const noexcept {
     return false;
 }
 

@@ -114,7 +114,7 @@ void LineBucket::addGeometry(const GeometryCoordinates& coordinates,
     generator.generate(coordinates, options);
 }
 
-void LineBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
+void LineBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass, [[maybe_unused]] std::optional<std::size_t> threadIndex) {
 #if MLN_LEGACY_RENDERER
     if (!uploaded) {
         vertexBuffer = uploadPass.createVertexBuffer(std::move(vertices));
@@ -129,20 +129,22 @@ void LineBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
     uploaded = true;
 }
 
-bool LineBucket::hasData() const {
+bool LineBucket::hasData() const noexcept {
     return !segments.empty();
 }
 
+namespace {
 template <class Property>
-static float get(const LinePaintProperties::PossiblyEvaluated& evaluated,
-                 const std::string& id,
-                 const std::map<std::string, LineProgram::Binders>& paintPropertyBinders) {
+float get(const LinePaintProperties::PossiblyEvaluated& evaluated,
+          const std::string& id,
+          const std::map<std::string, LineProgram::Binders>& paintPropertyBinders) {
     auto it = paintPropertyBinders.find(id);
     if (it == paintPropertyBinders.end() || !it->second.statistics<Property>().max()) {
         return evaluated.get<Property>().constantOr(Property::defaultValue());
     } else {
         return *it->second.statistics<Property>().max();
     }
+}
 }
 
 float LineBucket::getQueryRadius(const RenderLayer& layer) const {

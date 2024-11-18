@@ -38,12 +38,12 @@ public:
     gfx::TextureBinding textureBinding() const; // @TODO: Migrate
 #endif
 
-    void upload(gfx::UploadPass&);
-    Size getPixelSize() const;
+    void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex);
+    Size getPixelSize() const noexcept;
 
-    const PremultipliedImage& getAtlasImageForTests() const { return atlasImage; }
+    const PremultipliedImage& getAtlasImageForTests() const noexcept { return atlasImage; }
 
-    bool isEmpty() const { return patterns.empty(); }
+    bool isEmpty() const noexcept { return patterns.empty(); }
 
 private:
     struct Pattern {

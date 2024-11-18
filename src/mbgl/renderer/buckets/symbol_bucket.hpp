@@ -82,19 +82,19 @@ public:
                  bool iconsInText);
     ~SymbolBucket() override;
 
-    void upload(gfx::UploadPass&) override;
-    bool hasData() const override;
+    void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex) override;
+    bool hasData() const noexcept override;
     std::pair<uint32_t, bool> registerAtCrossTileIndex(CrossTileSymbolLayerIndex&, const RenderTile&) override;
     void place(Placement&, const BucketPlacementData&, std::set<uint32_t>&) override;
     void updateVertices(
         const Placement&, bool updateOpacities, const TransformState&, const RenderTile&, std::set<uint32_t>&) override;
-    bool hasTextData() const;
-    bool hasIconData() const;
-    bool hasSdfIconData() const;
-    bool hasIconCollisionBoxData() const;
-    bool hasIconCollisionCircleData() const;
-    bool hasTextCollisionBoxData() const;
-    bool hasTextCollisionCircleData() const;
+    bool hasTextData() const noexcept;
+    bool hasIconData() const noexcept;
+    bool hasSdfIconData() const noexcept;
+    bool hasIconCollisionBoxData() const noexcept;
+    bool hasIconCollisionCircleData() const noexcept;
+    bool hasTextCollisionBoxData() const noexcept;
+    bool hasTextCollisionCircleData() const noexcept;
     bool hasFormatSectionOverrides() const;
     bool hasVariableTextAnchors() const;
 

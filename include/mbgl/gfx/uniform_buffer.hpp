@@ -15,7 +15,6 @@ class UniformBufferArray;
 
 using UniformBufferPtr = std::shared_ptr<UniformBuffer>;
 using UniqueUniformBuffer = std::unique_ptr<UniformBuffer>;
-using UniqueUniformBufferArray = std::unique_ptr<UniformBufferArray>;
 
 class UniformBuffer {
     // Can only be created by platform specific implementations

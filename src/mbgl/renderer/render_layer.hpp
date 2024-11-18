@@ -107,31 +107,31 @@ public:
     virtual void evaluate(const PropertyEvaluationParameters&) = 0;
 
     // Returns true if any paint properties have active transitions.
-    virtual bool hasTransition() const = 0;
+    virtual bool hasTransition() const noexcept = 0;
 
     // Returns true if the layer has a pattern property and is actively crossfading.
-    virtual bool hasCrossfade() const = 0;
+    virtual bool hasCrossfade() const noexcept = 0;
 
     // Returns true if layer writes to depth buffer by drawing using PaintParameters::depthModeFor3D().
-    virtual bool is3D() const { return false; }
+    virtual bool is3D() const noexcept { return false; }
 
     // Returns true is the layer is subject to placement.
-    bool needsPlacement() const;
+    bool needsPlacement() const noexcept;
 
-    const std::string& getID() const;
+    const std::string& getID() const noexcept;
 
     int32_t getLayerIndex() const noexcept;
 
     // Checks whether this layer needs to be rendered in the given render pass.
-    bool hasRenderPass(RenderPass) const;
+    bool hasRenderPass(RenderPass) const noexcept;
 
     // Checks whether this layer can be rendered.
-    bool needsRendering() const;
+    bool needsRendering() const noexcept;
 
     // Checks whether the given zoom is inside this layer zoom range.
-    bool supportsZoom(float zoom) const;
+    bool supportsZoom(float zoom) const noexcept;
 
-    virtual void upload(gfx::UploadPass&) {}
+    virtual void upload(gfx::UploadPass&, std::optional<std::size_t>) {}
     virtual void render(PaintParameters&) {}
 
     // Check whether the given geometry intersects with the feature
@@ -149,7 +149,7 @@ public:
 
     virtual void prepare(const LayerPrepareParameters&);
 
-    const LayerPlacementData& getPlacementData() const { return placementData; }
+    const LayerPlacementData& getPlacementData() const noexcept { return placementData; }
 
     // Latest evaluated properties.
     Immutable<style::LayerProperties> evaluatedProperties;

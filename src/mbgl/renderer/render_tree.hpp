@@ -34,9 +34,9 @@ public:
     using DebugLayerGroupMap = std::map<DebugType, LayerGroupBasePtr>;
 
     virtual ~RenderItem() = default;
-    virtual void upload(gfx::UploadPass&) const = 0;
+    virtual void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex) const = 0;
     virtual void render(PaintParameters&) const = 0;
-    virtual bool hasRenderPass(RenderPass) const = 0;
+    virtual bool hasRenderPass(RenderPass) const noexcept = 0;
     virtual const std::string& getName() const = 0;
 #if MLN_DRAWABLE_RENDERER
     virtual void updateDebugDrawables(DebugLayerGroupMap&, PaintParameters&) const = 0;
@@ -54,8 +54,8 @@ public:
     const uint32_t index;
 
 private:
-    bool hasRenderPass(RenderPass pass) const override;
-    void upload(gfx::UploadPass& pass) const override;
+    bool hasRenderPass(RenderPass pass) const noexcept override;
+    void upload(gfx::UploadPass& pass, std::optional<std::size_t> threadIndex) const override;
     void render(PaintParameters& parameters) const override;
     const std::string& getName() const override;
 #if MLN_DRAWABLE_RENDERER

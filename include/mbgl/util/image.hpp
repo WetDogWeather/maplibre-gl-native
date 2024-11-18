@@ -61,7 +61,7 @@ public:
 
     friend bool operator!=(const Image& lhs, const Image& rhs) { return !(lhs == rhs); }
 
-    bool valid() const { return !size.isEmpty() && data != nullptr; }
+    bool valid() const noexcept { return !size.isEmpty() && data != nullptr; }
 
     template <typename T = Image>
     T clone() const {

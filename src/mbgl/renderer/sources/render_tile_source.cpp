@@ -42,9 +42,9 @@ namespace mbgl {
 using namespace style;
 using namespace shaders;
 
-void TileSourceRenderItem::upload(gfx::UploadPass& parameters) const {
+void TileSourceRenderItem::upload(gfx::UploadPass& uploadPass, std::optional<std::size_t> threadIndex) const {
     for (auto& tile : *renderTiles) {
-        tile.upload(parameters);
+        tile.upload(uploadPass, threadIndex);
     }
 }
 

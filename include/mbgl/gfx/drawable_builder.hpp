@@ -89,10 +89,10 @@ public:
     void setDepthType(DepthMaskType value) { depthType = value; }
 
     /// Uses 3D depth mode
-    bool getIs3D() const { return is3D; }
+    bool getIs3D() const noexcept { return is3D; }
 
     /// Set 3D mode
-    void setIs3D(bool value) { is3D = value; }
+    void setIs3D(bool value) noexcept { is3D = value; }
 
     /// Set the draw priority on all drawables including those already generated
     void resetDrawPriority(DrawPriority);

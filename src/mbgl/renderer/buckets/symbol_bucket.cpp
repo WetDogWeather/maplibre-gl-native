@@ -62,7 +62,7 @@ SymbolBucket::SymbolBucket(Immutable<style::SymbolLayoutProperties::PossiblyEval
 
 SymbolBucket::~SymbolBucket() = default;
 
-void SymbolBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
+void SymbolBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass, [[maybe_unused]] std::optional<std::size_t> threadIndex) {
 #if MLN_LEGACY_RENDERER
     if (hasTextData()) {
         if (!staticUploaded) {
@@ -185,36 +185,36 @@ void SymbolBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
     sortUploaded = true;
 }
 
-bool SymbolBucket::hasData() const {
+bool SymbolBucket::hasData() const noexcept {
     return hasTextData() || hasIconData() || hasSdfIconData() || hasIconCollisionBoxData() ||
            hasTextCollisionBoxData() || hasIconCollisionCircleData() || hasTextCollisionCircleData();
 }
 
-bool SymbolBucket::hasTextData() const {
+bool SymbolBucket::hasTextData() const noexcept {
     return !text.segments.empty();
 }
 
-bool SymbolBucket::hasIconData() const {
+bool SymbolBucket::hasIconData() const noexcept {
     return !icon.segments.empty();
 }
 
-bool SymbolBucket::hasSdfIconData() const {
+bool SymbolBucket::hasSdfIconData() const noexcept {
     return !sdfIcon.segments.empty();
 }
 
-bool SymbolBucket::hasIconCollisionBoxData() const {
+bool SymbolBucket::hasIconCollisionBoxData() const noexcept {
     return iconCollisionBox && !iconCollisionBox->segments.empty();
 }
 
-bool SymbolBucket::hasIconCollisionCircleData() const {
+bool SymbolBucket::hasIconCollisionCircleData() const noexcept {
     return iconCollisionCircle && !iconCollisionCircle->segments.empty();
 }
 
-bool SymbolBucket::hasTextCollisionBoxData() const {
+bool SymbolBucket::hasTextCollisionBoxData() const noexcept {
     return textCollisionBox && !textCollisionBox->segments.empty();
 }
 
-bool SymbolBucket::hasTextCollisionCircleData() const {
+bool SymbolBucket::hasTextCollisionCircleData() const noexcept {
     return textCollisionCircle && !textCollisionCircle->segments.empty();
 }
 
@@ -358,7 +358,7 @@ bool SymbolBucket::hasFormatSectionOverrides() const {
 
 bool SymbolBucket::hasVariableTextAnchors() const {
     auto hasTextVariableAnchorOffset = [&]() -> bool {
-        auto tvao = layout->get<TextVariableAnchorOffset>();
+        const auto tvao = layout->get<TextVariableAnchorOffset>();
         if (tvao.isConstant()) {
             const auto constValue = tvao.constant();
             return constValue && !constValue->empty();

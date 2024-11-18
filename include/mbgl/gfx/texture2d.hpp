@@ -78,16 +78,16 @@ public:
 
     /// @brief Upload image data to the texture resource
     /// @param pixelData Image data to transfer
-    virtual void upload(const void* pixelData, const Size& size_) noexcept = 0;
+    virtual void upload(const void* pixelData, const Size& size_, std::optional<std::size_t> threadIndex) = 0;
 
     /// @brief Upload image data to the texture resource
     /// @tparam Image Image object type
     /// @param img Image to transfer
     template <typename Image>
-    void upload(const Image& img) noexcept {
+    void upload(const Image& img, std::optional<std::size_t> threadIndex) {
         setFormat(Image::channels == 1 ? gfx::TexturePixelType::Alpha : gfx::TexturePixelType::RGBA,
                   gfx::TextureChannelDataType::UnsignedByte);
-        upload(img.data ? img.data.get() : nullptr, img.size);
+        upload(img.data ? img.data.get() : nullptr, img.size, threadIndex);
     }
 
     /// @brief Upload a subregion of the texture resource
@@ -98,7 +98,8 @@ public:
     virtual void uploadSubRegion(const void* pixelData,
                                  const Size& size,
                                  uint16_t xOffset,
-                                 uint16_t yOffset) noexcept = 0;
+                                 uint16_t yOffset,
+                                 std::optional<std::size_t> threadIndex) = 0;
 
     /// @brief Upload a subregion of the texture resource
     /// @tparam Image Image object type
@@ -106,17 +107,17 @@ public:
     /// @param xOffset Destination x coordinate
     /// @param yOffset Destination y coordinate
     template <typename Image>
-    void uploadSubRegion(const Image& img, uint16_t xOffset, uint16_t yOffset) noexcept {
+    void uploadSubRegion(const Image& img, uint16_t xOffset, uint16_t yOffset, std::optional<std::size_t> threadIndex) {
         assert(Image::channels == numChannels());
         assert(Image::channels == getPixelStride());
         assert(img.size.width + xOffset <= getSize().width);
         assert(img.size.height + yOffset <= getSize().height);
-        uploadSubRegion(img.data ? img.data.get() : nullptr, img.size, xOffset, yOffset);
+        uploadSubRegion(img.data ? img.data.get() : nullptr, img.size, xOffset, yOffset, threadIndex);
     }
 
     /// @brief Upload staged image data if present and required.
     /// @see needsUpload
-    virtual void upload() noexcept = 0;
+    virtual void upload(std::optional<std::size_t> threadIndex) = 0;
 
     /// @brief Check whether the texture needs upload
     /// @return bool

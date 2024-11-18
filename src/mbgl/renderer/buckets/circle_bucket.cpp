@@ -25,7 +25,7 @@ CircleBucket::~CircleBucket() {
     sharedVertices->release();
 }
 
-void CircleBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
+void CircleBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass, [[maybe_unused]] std::optional<std::size_t> threadIndex) {
 #if MLN_LEGACY_RENDERER
     if (!uploaded) {
         vertexBuffer = uploadPass.createVertexBuffer(std::move(vertices));
@@ -40,20 +40,22 @@ void CircleBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
     uploaded = true;
 }
 
-bool CircleBucket::hasData() const {
+bool CircleBucket::hasData() const noexcept {
     return !segments.empty();
 }
 
+namespace {
 template <class Property>
-static float get(const CirclePaintProperties::PossiblyEvaluated& evaluated,
-                 const std::string& id,
-                 const std::map<std::string, CircleProgram::Binders>& paintPropertyBinders) {
-    auto it = paintPropertyBinders.find(id);
+float get(const CirclePaintProperties::PossiblyEvaluated& evaluated,
+          const std::string& id,
+          const std::map<std::string, CircleProgram::Binders>& paintPropertyBinders) {
+    const auto it = paintPropertyBinders.find(id);
     if (it == paintPropertyBinders.end() || !it->second.statistics<Property>().max()) {
         return evaluated.get<Property>().constantOr(Property::defaultValue());
     } else {
         return *it->second.statistics<Property>().max();
     }
+}
 }
 
 float CircleBucket::getQueryRadius(const RenderLayer& layer) const {

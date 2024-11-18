@@ -20,10 +20,10 @@ public:
     const std::vector<mat4> matrices;
 
 private:
-    void upload(gfx::UploadPass&) const override;
+    void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex) const override;
     void render(PaintParameters&) const override;
-    bool hasRenderPass(RenderPass) const override { return false; }
-    const std::string& getName() const override { return name; }
+    bool hasRenderPass(RenderPass) const noexcept override { return false; }
+    const std::string& getName() const noexcept override { return name; }
     std::string name;
 #if MLN_DRAWABLE_RENDERER
     void updateDebugDrawables(DebugLayerGroupMap&, PaintParameters&) const override {};

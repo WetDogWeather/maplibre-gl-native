@@ -61,10 +61,10 @@ void RenderCustomLayer::evaluate(const PropertyEvaluationParameters&) {
     // It is fine to not update `evaluatedProperties`, as `baseImpl` should never be updated for this layer.
 }
 
-bool RenderCustomLayer::hasTransition() const {
+bool RenderCustomLayer::hasTransition() const noexcept {
     return false;
 }
-bool RenderCustomLayer::hasCrossfade() const {
+bool RenderCustomLayer::hasCrossfade() const noexcept {
     return false;
 }
 

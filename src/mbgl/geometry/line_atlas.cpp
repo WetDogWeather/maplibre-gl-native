@@ -206,11 +206,11 @@ DashPatternTexture::DashPatternTexture(const std::vector<float>& from_,
     texture = std::move(image);
 }
 
-void DashPatternTexture::upload(gfx::UploadPass& uploadPass) {
+void DashPatternTexture::upload(gfx::UploadPass& uploadPass, std::optional<std::size_t> threadIndex) {
 #if MLN_DRAWABLE_RENDERER
     if (std::holds_alternative<AlphaImage>(texture)) {
         auto tempTexture = uploadPass.getContext().createTexture2D();
-        tempTexture->upload(std::get<AlphaImage>(texture));
+        tempTexture->upload(std::get<AlphaImage>(texture), threadIndex);
         tempTexture->setSamplerConfiguration(
             {gfx::TextureFilterType::Linear, gfx::TextureWrapType::Repeat, gfx::TextureWrapType::Clamp});
         texture = std::move(tempTexture);
@@ -274,11 +274,11 @@ DashPatternTexture& LineAtlas::getDashPatternTexture(const std::vector<float>& f
     }
 }
 
-void LineAtlas::upload(gfx::UploadPass& uploadPass) {
+void LineAtlas::upload(gfx::UploadPass& uploadPass, std::optional<std::size_t> threadIndex) {
     for (const size_t hash : needsUpload) {
         const auto it = textures.find(hash);
         if (it != textures.end()) {
-            it->second.upload(uploadPass);
+            it->second.upload(uploadPass, threadIndex);
         }
     }
     needsUpload.clear();

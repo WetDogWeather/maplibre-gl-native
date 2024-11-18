@@ -50,13 +50,13 @@ public:
     // As long as this bucket has a Prepare render pass, this function is
     // getting called. Typically, this only happens once when the bucket is
     // being rendered for the first time.
-    virtual void upload(gfx::UploadPass&) = 0;
+    virtual void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex) = 0;
 
-    virtual bool hasData() const = 0;
+    virtual bool hasData() const noexcept = 0;
 
     virtual float getQueryRadius(const RenderLayer&) const { return 0; };
 
-    bool needsUpload() const { return hasData() && !uploaded; }
+    bool needsUpload() const noexcept { return hasData() && !uploaded; }
 
     // The following methods are implemented by buckets that require cross-tile indexing and placement.
 

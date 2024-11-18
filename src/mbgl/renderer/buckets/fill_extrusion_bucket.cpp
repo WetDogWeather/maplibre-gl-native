@@ -171,7 +171,7 @@ void FillExtrusionBucket::addFeature(const GeometryTileFeature& feature,
     }
 }
 
-void FillExtrusionBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
+void FillExtrusionBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass, [[maybe_unused]] std::optional<std::size_t> threadIndex) {
 #if MLN_LEGACY_RENDERER
     if (!uploaded) {
         vertexBuffer = uploadPass.createVertexBuffer(std::move(vertices));
@@ -186,7 +186,7 @@ void FillExtrusionBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
     uploaded = true;
 }
 
-bool FillExtrusionBucket::hasData() const {
+bool FillExtrusionBucket::hasData() const noexcept {
     return !triangleSegments.empty();
 }
 
@@ -200,7 +200,7 @@ void FillExtrusionBucket::update(const FeatureStates& states,
                                  const GeometryTileLayer& layer,
                                  const std::string& layerID,
                                  const ImagePositions& imagePositions) {
-    auto it = paintPropertyBinders.find(layerID);
+    const auto it = paintPropertyBinders.find(layerID);
     if (it != paintPropertyBinders.end()) {
         it->second.updateVertexVectors(states, layer, imagePositions);
         uploaded = false;

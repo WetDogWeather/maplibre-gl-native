@@ -20,9 +20,9 @@ using namespace style;
 
 ImageSourceRenderData::~ImageSourceRenderData() = default;
 
-void ImageSourceRenderData::upload(gfx::UploadPass& uploadPass) const {
+void ImageSourceRenderData::upload(gfx::UploadPass& uploadPass, std::optional<std::size_t> threadIndex) const {
     if (bucket && bucket->needsUpload()) {
-        bucket->upload(uploadPass);
+        bucket->upload(uploadPass, threadIndex);
     }
 
 #if MLN_LEGACY_RENDERER

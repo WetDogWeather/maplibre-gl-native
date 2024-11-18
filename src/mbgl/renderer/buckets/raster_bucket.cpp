@@ -18,7 +18,7 @@ RasterBucket::~RasterBucket() {
     setImage({});
 }
 
-void RasterBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
+void RasterBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass, [[maybe_unused]] std::optional<std::size_t> threadIndex) {
     if (!hasData()) {
         return;
     }
@@ -119,8 +119,8 @@ void RasterBucket::setMask(TileMask&& mask_) {
     vertices.updateModified();
 }
 
-bool RasterBucket::hasData() const {
-    return !!image;
+bool RasterBucket::hasData() const noexcept {
+    return image.operator bool();
 }
 
 } // namespace mbgl

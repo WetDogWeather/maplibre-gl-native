@@ -80,7 +80,7 @@ public:
     const gfx::Texture* getIconAtlasTexture() const;
 #endif
 
-    void upload(gfx::UploadPass&) const;
+    void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex) const;
     void prepare(const SourcePrepareParameters&);
     void finishRender(PaintParameters&) const;
 

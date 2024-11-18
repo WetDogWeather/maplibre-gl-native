@@ -231,7 +231,7 @@ void Drawable::upload(gfx::UploadPass& uploadPass_, [[maybe_unused]] PaintParame
         textures.begin(), textures.end(), [](const auto& texture) { return texture && texture->needsUpload(); });
 
     if (texturesNeedUpload) {
-        uploadTextures(uploadPass);
+        uploadTextures(uploadPass, parameters.renderThreadIndex);
     }
 
     attributeUpdateTime = util::MonotonicTimer::now();
@@ -463,11 +463,11 @@ bool Drawable::bindDescriptors(CommandEncoder& encoder,
     return true;
 }
 
-void Drawable::uploadTextures(UploadPass&) const noexcept {
+void Drawable::uploadTextures(UploadPass&, std::optional<std::size_t> threadIndex) const noexcept {
     MLN_TRACE_FUNC();
     for (const auto& texture : textures) {
         if (texture) {
-            texture->upload();
+            texture->upload(threadIndex);
         }
     }
 }

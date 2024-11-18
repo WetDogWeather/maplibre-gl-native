@@ -76,15 +76,15 @@ void RenderFillExtrusionLayer::evaluate(const PropertyEvaluationParameters& para
 #endif // MLN_DRAWABLE_RENDERER
 }
 
-bool RenderFillExtrusionLayer::hasTransition() const {
+bool RenderFillExtrusionLayer::hasTransition() const noexcept {
     return unevaluated.hasTransition();
 }
 
-bool RenderFillExtrusionLayer::hasCrossfade() const {
+bool RenderFillExtrusionLayer::hasCrossfade() const noexcept {
     return getCrossfade<FillExtrusionLayerProperties>(evaluatedProperties).t != 1;
 }
 
-bool RenderFillExtrusionLayer::is3D() const {
+bool RenderFillExtrusionLayer::is3D() const noexcept {
     return true;
 }
 

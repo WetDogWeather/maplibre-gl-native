@@ -45,15 +45,16 @@
 #if !MLN_RENDER_BACKEND_OPENGL
 
 #include <mbgl/gfx/vertex_attribute.hpp>
-#include <mbgl/renderer/render_static_data.hpp>
-#include <mbgl/shaders/common_ubo.hpp>
 #include <mbgl/gfx/drawable.hpp>
 #include <mbgl/gfx/drawable_builder.hpp>
 #include <mbgl/gfx/drawable_impl.hpp>
 #include <mbgl/gfx/drawable_tweaker.hpp>
 #include <mbgl/gfx/texture2d.hpp>
+#include <mbgl/shaders/common_ubo.hpp>
 #include <mbgl/shaders/shader_defines.hpp>
 #include <mbgl/renderer/layers/location_indicator_layer_tweaker.hpp>
+#include <mbgl/renderer/render_static_data.hpp>
+#include <mbgl/renderer/update_parameters.hpp>
 
 #endif
 
@@ -980,10 +981,10 @@ void RenderLocationIndicatorLayer::evaluate(const PropertyEvaluationParameters& 
     evaluatedProperties = std::move(properties);
 }
 
-bool RenderLocationIndicatorLayer::hasTransition() const {
+bool RenderLocationIndicatorLayer::hasTransition() const noexcept {
     return unevaluated.hasTransition();
 }
-bool RenderLocationIndicatorLayer::hasCrossfade() const {
+bool RenderLocationIndicatorLayer::hasCrossfade() const noexcept {
     return false;
 }
 
@@ -1277,7 +1278,7 @@ void RenderLocationIndicatorLayer::update(gfx::ShaderRegistry& shaders,
                                                                        true});
                 }
 
-                info.textureInfo.texture->upload(info.textureInfo.image->get()->image);
+                info.textureInfo.texture->upload(info.textureInfo.image->get()->image, {});
                 info.textureInfo.image.reset();
             }
 

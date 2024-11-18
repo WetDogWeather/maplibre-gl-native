@@ -40,11 +40,11 @@ LayerRenderItem::LayerRenderItem(RenderLayer& layer_, RenderSource* source_, uin
       source(source_),
       index(index_) {}
 
-bool LayerRenderItem::hasRenderPass(RenderPass pass) const {
+bool LayerRenderItem::hasRenderPass(RenderPass pass) const noexcept {
     return layer.get().hasRenderPass(pass);
 }
-void LayerRenderItem::upload(gfx::UploadPass& pass) const {
-    layer.get().upload(pass);
+void LayerRenderItem::upload(gfx::UploadPass& pass, std::optional<std::size_t> threadIndex) const {
+    layer.get().upload(pass, threadIndex);
 }
 void LayerRenderItem::render(PaintParameters& parameters) const {
     layer.get().render(parameters);

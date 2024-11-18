@@ -161,16 +161,16 @@ public:
     virtual void setDepthType(DepthMaskType value) { depthType = value; }
 
     /// Uses 3D depth mode
-    bool getIs3D() const { return is3D; }
+    bool getIs3D() const noexcept { return is3D; }
 
     /// Set 3D mode
-    void setIs3D(bool value) { is3D = value; }
+    void setIs3D(bool value) noexcept { is3D = value; }
 
     /// True if this is a custom drawable
-    bool getIsCustom() const { return isCustom; }
+    bool getIsCustom() const noexcept { return isCustom; }
 
     /// Sets custom status for this drawable
-    void setIsCustom(bool value) { isCustom = value; }
+    void setIsCustom(bool value) noexcept { isCustom = value; }
 
     /// Get the ID of the tile that this drawable represents, if any
     const std::optional<OverscaledTileID>& getTileID() const { return tileID; }

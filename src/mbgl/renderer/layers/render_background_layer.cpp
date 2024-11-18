@@ -76,11 +76,11 @@ void RenderBackgroundLayer::evaluate(const PropertyEvaluationParameters& paramet
 #endif
 }
 
-bool RenderBackgroundLayer::hasTransition() const {
+bool RenderBackgroundLayer::hasTransition() const noexcept {
     return unevaluated.hasTransition();
 }
 
-bool RenderBackgroundLayer::hasCrossfade() const {
+bool RenderBackgroundLayer::hasCrossfade() const noexcept {
     return getCrossfade<BackgroundLayerProperties>(evaluatedProperties).t != 1;
 }
 

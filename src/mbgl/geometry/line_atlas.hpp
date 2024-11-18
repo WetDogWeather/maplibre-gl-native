@@ -48,7 +48,7 @@ public:
     // Uploads the texture to the GPU to be available when we need it. This is a
     // lazy operation; the texture is only bound when the data is uploaded for
     // the first time.
-    void upload(gfx::UploadPass&);
+    void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex);
 
     // Binds the atlas texture to the GPU, and uploads data if it is out of date.
 #if MLN_DRAWABLE_RENDERER
@@ -84,9 +84,9 @@ public:
                                               LinePatternCap);
 
     // Uploads the textures to the GPU to be available when we need it.
-    void upload(gfx::UploadPass&);
+    void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex);
 
-    bool isEmpty() const { return textures.empty(); }
+    bool isEmpty() const noexcept { return textures.empty(); }
 
 private:
     std::map<size_t, DashPatternTexture> textures;

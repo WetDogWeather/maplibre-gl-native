@@ -135,7 +135,7 @@ void Context::initFrameResources() {
     }
 
     // force placeholder texture upload before any descriptor sets
-    (void)getDummyTexture();
+    (void)getDummyTexture({});
 
     buildUniformDescriptorSetLayout(
         globalUniformDescriptorSetLayout, globalUBOCount, "GlobalUniformDescriptorSetLayout");
@@ -159,13 +159,18 @@ void Context::destroyResources() {
     frameResources.clear();
 }
 
-void Context::enqueueDeletion(std::function<void(Context&)>&& function) {
+void Context::enqueueDeletion(std::optional<std::size_t> threadIndex, std::function<void(Context&)>&& function) {
     if (frameResources.empty()) {
         function(*this);
         return;
     }
 
-    frameResources[frameResourceIndex].deletionQueue.push_back(std::move(function));
+    if (threadIndex) {
+        frameResources[frameResourceIndex].deletionQueue[*threadIndex+1].push(std::move(function));
+    } else {
+        std::lock_guard lock(frameResources[frameResourceIndex].deletionQueueMutex);
+        frameResources[frameResourceIndex].deletionQueue[0].push(std::move(function));
+    }
 }
 
 void Context::submitOneTimeCommand(const std::function<void(const vk::UniqueCommandBuffer&)>& function) const {
@@ -606,7 +611,7 @@ const std::unique_ptr<BufferResource>& Context::getDummyUniformBuffer() {
     return dummyUniformBuffer;
 }
 
-const std::unique_ptr<Texture2D>& Context::getDummyTexture() {
+const std::unique_ptr<Texture2D>& Context::getDummyTexture(std::optional<std::size_t> threadIndex) {
     if (!dummyTexture2D) {
         const Size size(2, 2);
         const std::vector<Color> data(4ull * size.width * size.height, Color::white());
@@ -616,7 +621,7 @@ const std::unique_ptr<Texture2D>& Context::getDummyTexture() {
         dummyTexture2D->setSize(size);
 
         submitOneTimeCommand([&](const vk::UniqueCommandBuffer& commandBuffer) {
-            dummyTexture2D->uploadSubRegion(data.data(), size, 0, 0, commandBuffer);
+            dummyTexture2D->uploadSubRegion(data.data(), size, 0, 0, commandBuffer, threadIndex);
         });
     }
 
@@ -725,10 +730,14 @@ const vk::UniquePipelineLayout& Context::getPushConstantPipelineLayout() {
 void Context::FrameResources::runDeletionQueue(Context& context) {
     MLN_TRACE_FUNC();
 
-    for (const auto& function : deletionQueue) {
-        function(context);
+    std::lock_guard lock(deletionQueueMutex);
+
+    for (auto& threadQueue : deletionQueue) {
+        while (!threadQueue.empty()) {
+            threadQueue.front()(context);
+            threadQueue.pop();
+        }
     }
-    deletionQueue.clear();
 }
 
 } // namespace vulkan

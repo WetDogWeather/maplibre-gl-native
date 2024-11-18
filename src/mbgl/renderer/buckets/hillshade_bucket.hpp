@@ -21,8 +21,8 @@ public:
     HillshadeBucket(DEMData&&);
     ~HillshadeBucket() override;
 
-    void upload(gfx::UploadPass&) override;
-    bool hasData() const override;
+    void upload(gfx::UploadPass&, std::optional<std::size_t> threadIndex) override;
+    bool hasData() const noexcept override;
 
     void clear();
     void setMask(TileMask&&);

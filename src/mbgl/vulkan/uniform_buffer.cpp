@@ -25,6 +25,10 @@ UniformBuffer::~UniformBuffer() {
     buffer.getContext().renderingStats().memUniformBuffers -= static_cast<int>(size);
 }
 
+void UniformBuffer::releaseResource(std::optional<std::size_t> threadIndex) {
+    buffer.release(threadIndex);
+}
+
 void UniformBuffer::update(const void* data, std::size_t size_) {
     if (size != size_ || size != buffer.getSizeInBytes()) {
         Log::Error(
@@ -59,7 +63,7 @@ void UniformBufferArray::init(gfx::Context& context, std::size_t threadCount) {
 
 const std::shared_ptr<gfx::UniformBuffer>& UniformBufferArray::set(const std::size_t id,
                                                                    std::shared_ptr<gfx::UniformBuffer> uniformBuffer,
-                                                                   std::optional<std::size_t> /*threadIndex*/) {
+                                                                   std::optional<std::size_t> threadIndex) {
     if (id >= uniformBufferVector.size()) {
         return nullref;
     }
@@ -74,6 +78,9 @@ const std::shared_ptr<gfx::UniformBuffer>& UniformBufferArray::set(const std::si
         descriptorSet->markDirty(DescriptorSet::AllThreads);
     }
 
+    if (uniformBufferVector[id]) {
+        static_cast<vulkan::UniformBuffer&>(*uniformBufferVector[id]).releaseResource(threadIndex);
+    }
     uniformBufferVector[id] = std::move(uniformBuffer);
     return uniformBufferVector[id];
 }

@@ -19,8 +19,8 @@ public:
     int32_t get(int32_t x, int32_t y) const;
     const std::array<float, 4>& getUnpackVector() const;
 
-    const PremultipliedImage* getImage() const { return &*image; }
-    const std::shared_ptr<PremultipliedImage>& getImagePtr() const { return image; }
+    const PremultipliedImage* getImage() const noexcept { return &*image; }
+    const std::shared_ptr<PremultipliedImage>& getImagePtr() const noexcept { return image; }
 
     const int32_t dim;
     const int32_t stride;

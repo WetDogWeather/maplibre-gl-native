@@ -75,7 +75,7 @@ void FillBucket::addFeature(const GeometryTileFeature& feature,
 }
 #endif // MLN_TRIANGULATE_FILL_OUTLINES
 
-void FillBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
+void FillBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass, [[maybe_unused]] std::optional<std::size_t> threadIndex) {
 #if MLN_LEGACY_RENDERER
     if (!uploaded) {
         vertexBuffer = uploadPass.createVertexBuffer(std::move(vertices));
@@ -92,7 +92,7 @@ void FillBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
     uploaded = true;
 }
 
-bool FillBucket::hasData() const {
+bool FillBucket::hasData() const noexcept {
     return !triangleSegments.empty() || !basicLineSegments.empty();
 }
 

@@ -83,11 +83,11 @@ void RenderHeatmapLayer::evaluate(const PropertyEvaluationParameters& parameters
 #endif
 }
 
-bool RenderHeatmapLayer::hasTransition() const {
+bool RenderHeatmapLayer::hasTransition() const noexcept {
     return unevaluated.hasTransition();
 }
 
-bool RenderHeatmapLayer::hasCrossfade() const {
+bool RenderHeatmapLayer::hasCrossfade() const noexcept {
     return false;
 }
 

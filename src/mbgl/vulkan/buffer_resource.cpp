@@ -25,7 +25,7 @@ bool BufferAllocation::create(const VmaAllocationCreateInfo& allocInfo, const vk
 
     assert(buffer_);
     buffer = vk::Buffer(buffer_);
-    assert(buffer);
+
     return true;
 }
 
@@ -98,7 +98,7 @@ BufferResource::BufferResource(
     if (isValid()) {
         auto& stats = context.renderingStats();
         stats.numBuffers++;
-        stats.memBuffers += totalSize;
+        stats.memBuffers += static_cast<int>(totalSize);
         stats.totalBuffers++;
 
         stats.totalBufferObjs++;
@@ -119,12 +119,16 @@ BufferResource::BufferResource(BufferResource&& other) noexcept
 BufferResource::~BufferResource() noexcept {
     if (isValid()) {
         context.renderingStats().numBuffers--;
-        context.renderingStats().memBuffers -= size;
+        context.renderingStats().memBuffers -= static_cast<int>(size);
     }
 
-    if (!bufferAllocation) return;
+    if (bufferAllocation) {
+        release({});
+    }
+}
 
-    context.enqueueDeletion([allocation = std::move(bufferAllocation)](auto&) mutable { allocation.reset(); });
+void BufferResource::release(std::optional<std::size_t> threadIndex) {
+    context.enqueueDeletion(threadIndex, [allocation = std::move(bufferAllocation)](auto&) mutable { allocation.reset(); });
 }
 
 BufferResource BufferResource::clone() const {
@@ -135,8 +139,8 @@ BufferResource& BufferResource::operator=(BufferResource&& other) noexcept {
     assert(&context == &other.context);
     if (isValid()) {
         context.renderingStats().numBuffers--;
-        context.renderingStats().memBuffers -= size;
-    };
+        context.renderingStats().memBuffers -= static_cast<int>(size);
+    }
     raw = std::move(other.raw);
     size = other.size;
     usage = other.usage;

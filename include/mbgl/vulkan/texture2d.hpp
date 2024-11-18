@@ -63,14 +63,15 @@ public:
 
     void create() noexcept override;
 
-    void upload() noexcept override;
-    void upload(const void* pixelData, const Size& size_) noexcept override;
-    void uploadSubRegion(const void* pixelData, const Size& size, uint16_t xOffset, uint16_t yOffset) noexcept override;
+    void upload(std::optional<std::size_t> threadIndex) override;
+    void upload(const void* pixelData, const Size& size_, std::optional<std::size_t> threadIndex) override;
+    void uploadSubRegion(const void* pixelData, const Size& size, uint16_t xOffset, uint16_t yOffset, std::optional<std::size_t> threadIndex) override;
     void uploadSubRegion(const void* pixelData,
                          const Size& size,
                          uint16_t xOffset,
                          uint16_t yOffset,
-                         const vk::UniqueCommandBuffer& buffer) noexcept;
+                         const vk::UniqueCommandBuffer&,
+                         std::optional<std::size_t> threadIndex);
 
     bool needsUpload() const noexcept override { return !!imageData; };
 

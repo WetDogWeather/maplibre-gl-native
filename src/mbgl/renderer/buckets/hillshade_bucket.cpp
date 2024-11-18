@@ -26,7 +26,7 @@ DEMData& HillshadeBucket::getDEMData() {
     return demdata;
 }
 
-void HillshadeBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
+void HillshadeBucket::upload([[maybe_unused]] gfx::UploadPass& uploadPass, [[maybe_unused]] std::optional<std::size_t> threadIndex) {
     if (!hasData()) {
         return;
     }
@@ -122,7 +122,7 @@ void HillshadeBucket::setMask(TileMask&& mask_) {
     vertices.updateModified();
 }
 
-bool HillshadeBucket::hasData() const {
+bool HillshadeBucket::hasData() const noexcept {
     return demdata.getImage()->valid();
 }
 

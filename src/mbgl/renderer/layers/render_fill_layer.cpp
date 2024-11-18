@@ -97,11 +97,11 @@ void RenderFillLayer::evaluate(const PropertyEvaluationParameters& parameters) {
 #endif
 }
 
-bool RenderFillLayer::hasTransition() const {
+bool RenderFillLayer::hasTransition() const noexcept {
     return unevaluated.hasTransition();
 }
 
-bool RenderFillLayer::hasCrossfade() const {
+bool RenderFillLayer::hasCrossfade() const noexcept {
     return getCrossfade<FillLayerProperties>(evaluatedProperties).t != 1;
 }
 

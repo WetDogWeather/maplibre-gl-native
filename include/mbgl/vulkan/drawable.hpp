@@ -61,7 +61,7 @@ protected:
                          std::size_t threadCount,
                          std::optional<std::size_t> threadIndex) const noexcept;
 
-    void uploadTextures(UploadPass&) const noexcept;
+    void uploadTextures(UploadPass&, std::optional<std::size_t> threadIndex) const noexcept;
 
     class Impl;
     const std::unique_ptr<Impl> impl;

@@ -400,11 +400,11 @@ void RenderSymbolLayer::evaluate(const PropertyEvaluationParameters& parameters)
 #endif // MLN_DRAWABLE_RENDERER
 }
 
-bool RenderSymbolLayer::hasTransition() const {
+bool RenderSymbolLayer::hasTransition() const noexcept {
     return unevaluated.hasTransition();
 }
 
-bool RenderSymbolLayer::hasCrossfade() const {
+bool RenderSymbolLayer::hasCrossfade() const noexcept {
     return false;
 }
 

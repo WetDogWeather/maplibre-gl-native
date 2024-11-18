@@ -251,14 +251,14 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
         // Update all clipping IDs + upload buckets.
         for (const RenderItem& item : sourceRenderItems) {
-            item.upload(*uploadPass);
+            item.upload(*uploadPass, parameters.renderThreadIndex);
         }
         for (const RenderItem& item : layerRenderItems) {
-            item.upload(*uploadPass);
+            item.upload(*uploadPass, parameters.renderThreadIndex);
         }
         staticData->upload(*uploadPass);
-        renderTree.getLineAtlas().upload(*uploadPass);
-        renderTree.getPatternAtlas().upload(*uploadPass);
+        renderTree.getLineAtlas().upload(*uploadPass, parameters.renderThreadIndex);
+        renderTree.getPatternAtlas().upload(*uploadPass, parameters.renderThreadIndex);
     }
 
 #if MLN_DRAWABLE_RENDERER
@@ -299,7 +299,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         orchestrator.updateDebugLayerGroups(renderTree, parameters);
 
         // Give the layers a chance to upload
-        orchestrator.visitLayerGroups(renderThreadPool, [&](auto& layerGroup, const auto threadIndex, auto layerIndex) {
+        orchestrator.visitLayerGroups(nullptr, [&](auto& layerGroup, const auto threadIndex, auto layerIndex) {
             MLN_TRACE_ZONE(upload);
             initScope();
             auto& params = getParams(threadIndex);

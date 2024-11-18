@@ -29,12 +29,12 @@ void RenderLayer::transition(const TransitionParameters& parameters, Immutable<s
     transition(parameters);
 }
 
-bool RenderLayer::needsPlacement() const {
+bool RenderLayer::needsPlacement() const noexcept {
     return baseImpl->getTypeInfo()->crossTileIndex == style::LayerTypeInfo::CrossTileIndex::Required &&
            !placementData.empty();
 }
 
-const std::string& RenderLayer::getID() const {
+const std::string& RenderLayer::getID() const noexcept {
     return baseImpl->id;
 }
 
@@ -42,15 +42,15 @@ int32_t RenderLayer::getLayerIndex() const noexcept {
     return layerIndex;
 }
 
-bool RenderLayer::hasRenderPass(RenderPass pass) const {
+bool RenderLayer::hasRenderPass(RenderPass pass) const noexcept {
     return passes & pass;
 }
 
-bool RenderLayer::needsRendering() const {
+bool RenderLayer::needsRendering() const noexcept {
     return passes != RenderPass::None && baseImpl->visibility != style::VisibilityType::None;
 }
 
-bool RenderLayer::supportsZoom(float zoom) const {
+bool RenderLayer::supportsZoom(float zoom) const noexcept {
     // TODO: shall we use rounding or epsilon comparisons?
     return baseImpl->minZoom <= zoom && baseImpl->maxZoom >= zoom;
 }

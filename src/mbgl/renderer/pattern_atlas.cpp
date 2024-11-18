@@ -85,19 +85,19 @@ void PatternAtlas::removePattern(const std::string& id) {
     }
 }
 
-Size PatternAtlas::getPixelSize() const {
+Size PatternAtlas::getPixelSize() const noexcept {
     return {static_cast<uint32_t>(shelfPack.width()), static_cast<uint32_t>(shelfPack.height())};
 }
 
-void PatternAtlas::upload([[maybe_unused]] gfx::UploadPass& uploadPass) {
+void PatternAtlas::upload([[maybe_unused]] gfx::UploadPass& uploadPass, std::optional<std::size_t> threadIndex) {
 #if MLN_DRAWABLE_RENDERER
     if (!atlasTexture2D) {
         atlasTexture2D = uploadPass.getContext().createTexture2D();
         if (atlasTexture2D) {
-            atlasTexture2D->upload(atlasImage);
+            atlasTexture2D->upload(atlasImage, threadIndex);
         }
     } else if (dirty) {
-        atlasTexture2D->upload(atlasImage);
+        atlasTexture2D->upload(atlasImage, threadIndex);
     }
 #else
     if (!atlasTexture) {
