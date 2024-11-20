@@ -1449,6 +1449,8 @@ include(${PROJECT_SOURCE_DIR}/vendor/csscolorparser.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/earcut.hpp.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/eternal.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/mapbox-base.cmake)
+include(${PROJECT_SOURCE_DIR}/vendor/metal-cpp.cmake)
+include(${PROJECT_SOURCE_DIR}/vendor/nontype_functional.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/parsedate.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/polylabel.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/protozero.cmake)
@@ -1457,7 +1459,6 @@ include(${PROJECT_SOURCE_DIR}/vendor/unique_resource.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/unordered_dense.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/vector-tile.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/wagyu.cmake)
-include(${PROJECT_SOURCE_DIR}/vendor/metal-cpp.cmake)
 
 target_link_libraries(
     mbgl-core
@@ -1472,13 +1473,14 @@ target_link_libraries(
         mbgl-vendor-csscolorparser
         mbgl-vendor-earcut.hpp
         mbgl-vendor-eternal
+        $<$<BOOL:${MLN_WITH_METAL}>:mbgl-vendor-metal-cpp>
+        mbgl-vendor-nontype_functional
         mbgl-vendor-parsedate
         mbgl-vendor-polylabel
         mbgl-vendor-protozero
         mbgl-vendor-unique_resource
         mbgl-vendor-vector-tile
         mbgl-vendor-wagyu
-        $<$<BOOL:${MLN_WITH_METAL}>:mbgl-vendor-metal-cpp>
     PUBLIC
         Mapbox::Base
         Mapbox::Base::Extras::expected-lite
@@ -1511,13 +1513,14 @@ export(TARGETS
     mbgl-vendor-csscolorparser
     mbgl-vendor-earcut.hpp
     mbgl-vendor-eternal
+    mbgl-vendor-metal-cpp
+    mbgl-vendor-nontype_functional
     mbgl-vendor-parsedate
     mbgl-vendor-polylabel
     mbgl-vendor-protozero
     mbgl-vendor-unique_resource
     mbgl-vendor-vector-tile
     mbgl-vendor-wagyu
-    mbgl-vendor-metal-cpp
     unordered_dense
 
     FILE MapboxCoreTargets.cmake

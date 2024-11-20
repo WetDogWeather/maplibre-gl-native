@@ -303,7 +303,7 @@ private:
     std::set<OnlineFileRequest*> activeRequests;
 
     bool online = true;
-    uint32_t maximumConcurrentRequests;
+    uint32_t maximumConcurrentRequests = util::DEFAULT_MAXIMUM_CONCURRENT_REQUESTS;
     HTTPFileSource httpFileSource;
     util::AsyncTask reachability{std::bind(&OnlineFileSourceThread::networkIsReachableAgain, this)};
     std::map<AsyncRequest*, std::unique_ptr<OnlineFileRequest>> tasks;
@@ -320,7 +320,7 @@ public:
               resourceOptions.clone(),
               clientOptions.clone())) {}
 
-    std::unique_ptr<AsyncRequest> request(Callback callback, Resource res) {
+    std::unique_ptr<AsyncRequest> request(CopyableCallback<void(Response)>&& callback, Resource res) {
         auto req = std::make_unique<FileSourceRequest>(std::move(callback));
         req->onCancel(
             [actorRef = thread->actor(), req = req.get()]() { actorRef.invoke(&OnlineFileSourceThread::cancel, req); });
@@ -616,7 +616,8 @@ OnlineFileSource::OnlineFileSource(const ResourceOptions& resourceOptions, const
 
 OnlineFileSource::~OnlineFileSource() = default;
 
-std::unique_ptr<AsyncRequest> OnlineFileSource::request(const Resource& resource, Callback callback) {
+std::unique_ptr<AsyncRequest> OnlineFileSource::request(const Resource& resource,
+                                                        CopyableCallback<void(Response)>&& callback) {
     Resource res = resource;
     const TileServerOptions options = impl->getResourceOptions().tileServerOptions();
 

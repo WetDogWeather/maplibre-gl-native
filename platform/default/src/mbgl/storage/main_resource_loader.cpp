@@ -53,7 +53,7 @@ public:
                                        " Action: " << "Requesting,"
                                                    << " URL: " << res.url.c_str() << " Size: "
                                                    << (response.data != nullptr ? response.data->size() : 0) << "B,"
-                                                   << " Time")
+                                                   << " Time");
                 }
                 callback(response);
             });
@@ -160,7 +160,7 @@ public:
           resourceOptions(resourceOptions_.clone()),
           clientOptions(clientOptions_.clone()) {}
 
-    std::unique_ptr<AsyncRequest> request(const Resource& resource, Callback callback) {
+    std::unique_ptr<AsyncRequest> request(const Resource& resource, CopyableCallback<void(Response)>&& callback) {
         auto req = std::make_unique<FileSourceRequest>(std::move(callback));
 
         req->onCancel([actorRef = thread->actor(), req = req.get()]() {
@@ -244,7 +244,8 @@ bool MainResourceLoader::supportsCacheOnlyRequests() const {
     return impl->supportsCacheOnlyRequests();
 }
 
-std::unique_ptr<AsyncRequest> MainResourceLoader::request(const Resource& resource, Callback callback) {
+std::unique_ptr<AsyncRequest> MainResourceLoader::request(const Resource& resource,
+                                                          CopyableCallback<void(Response)>&& callback) {
     return impl->request(resource, std::move(callback));
 }
 
