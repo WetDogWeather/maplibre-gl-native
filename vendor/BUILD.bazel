@@ -230,8 +230,8 @@ cc_library(
 cc_library(
     name = "nontype_functional",
     srcs = [],
-    hdrs = ["nontype_functional/include"],
-    include_prefix = "ankerl",
-    strip_include_prefix = "nontype_functional/include",
+    hdrs = glob(["nontype_functional/include/std23/*.h"]),
+    include_prefix = "std23",
+    strip_include_prefix = "nontype_functional/include/std23",
     visibility = ["//visibility:public"],
 )
