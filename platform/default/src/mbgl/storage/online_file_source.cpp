@@ -37,9 +37,9 @@ constexpr const char* ONLINE_STATUS_KEY = "online-status";
 class OnlineFileSourceThread;
 
 struct OnlineFileRequest {
-    using Callback = std::function<void(Response)>;
+    using Callback = FileSource::CopyableCallback<void(Response)>;
 
-    OnlineFileRequest(Resource resource_, Callback callback_, OnlineFileSourceThread& impl_);
+    OnlineFileRequest(Resource resource_, Callback&& callback_, OnlineFileSourceThread& impl_);
     ~OnlineFileRequest();
 
     void networkIsReachableAgain();
@@ -429,7 +429,7 @@ private:
     const std::unique_ptr<util::Thread<OnlineFileSourceThread>> thread;
 };
 
-OnlineFileRequest::OnlineFileRequest(Resource resource_, Callback callback_, OnlineFileSourceThread& impl_)
+OnlineFileRequest::OnlineFileRequest(Resource resource_, Callback&& callback_, OnlineFileSourceThread& impl_)
     : impl(impl_),
       resource(std::move(resource_)),
       callback(std::move(callback_)) {
