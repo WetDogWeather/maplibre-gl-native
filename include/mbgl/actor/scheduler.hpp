@@ -47,11 +47,11 @@ public:
 
     /// Enqueues a function for execution.
     virtual void schedule(std::function<void()>&&) = 0;
-    virtual void schedule(const util::SimpleIdentity, std::function<void()>&&) = 0;
+    virtual void schedule(util::SimpleIdentity, std::function<void()>&&) = 0;
 
-    /// Schedule a task assigned to the given owner `tag` on a specific thread.
-    virtual void schedule(std::optional<std::size_t>, const util::SimpleIdentity, std::function<void()>&&) {
-        throw std::logic_error("Not supported by this implementation");
+    /// Enqueue multiple functions
+    virtual void schedule(const util::SimpleIdentity id, std::vector<std::function<void()>>&& fs) {
+        std::ranges::for_each(fs, [=,this](auto& f){ schedule(id, std::move(f)); });
     }
 
     /// Makes a weak pointer to this Scheduler.
@@ -96,9 +96,11 @@ public:
         MLN_TRACE_FUNC();
         const auto threadCount = getThreadCount();
         assert(0 < threadCount && threadCount <= std::latch::max());
+
         std::latch latch(static_cast<std::ptrdiff_t>(threadCount));
+        std::vector<std::function<void()>> funcs(threadCount);
         for (auto threadIndex = 0_uz; threadIndex < threadCount; ++threadIndex) {
-            schedule(tag, [&, threadIndex] {
+            funcs[threadIndex] = [&, threadIndex] {
                 MLN_TRACE_ZONE(task);
                 MLN_ZONE_VALUE(threadIndex);
                 try {
@@ -108,8 +110,9 @@ public:
                     throw;
                 }
                 latch.count_down();
-            });
+            };
         }
+        schedule(tag, std::move(funcs));
         f(std::optional<std::size_t>{});
         {
             MLN_TRACE_ZONE(join);

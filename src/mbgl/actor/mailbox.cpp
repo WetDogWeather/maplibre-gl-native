@@ -24,6 +24,7 @@ void Mailbox::open(const TaggedScheduler& scheduler_) {
 }
 
 void Mailbox::open(Scheduler& scheduler_) {
+    MLN_TRACE_FUNC();
     assert(!weakScheduler);
 
     // As with close(), block until neither receive() nor push() are in
@@ -43,6 +44,7 @@ void Mailbox::open(Scheduler& scheduler_) {
 }
 
 void Mailbox::close() {
+    MLN_TRACE_FUNC();
     abandon();
 
     // Block until neither receive() nor push() are in progress. Two mutexes are
@@ -105,13 +107,13 @@ void Mailbox::push(std::unique_ptr<Message> message) {
         }
 
         if (wasEmpty) {
-            MLN_TRACE_ZONE(schedule);
             scheduleToRecieve(schedulerTag);
         }
     }
 }
 
 void Mailbox::receive() {
+    MLN_TRACE_FUNC();
     auto idleState = State::Idle;
     while (!state.compare_exchange_strong(idleState, State::Processing)) {
         if (state == State::Abandoned) {
@@ -152,6 +154,7 @@ void Mailbox::receive() {
 }
 
 void Mailbox::scheduleToRecieve(const std::optional<util::SimpleIdentity>& tag) {
+    MLN_TRACE_FUNC();
     auto guard = weakScheduler.lock();
     if (weakScheduler) {
         std::weak_ptr<Mailbox> mailbox = shared_from_this();

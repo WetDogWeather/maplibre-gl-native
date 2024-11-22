@@ -15,18 +15,8 @@ namespace mbgl {
 
 class TileCache {
 public:
-    TileCache(const TaggedScheduler& threadPool_, size_t size_ = 0)
-        : threadPool(threadPool_),
-          size(size_) {}
-
-    ~TileCache() {
-        clear();
-
-        std::unique_lock<std::mutex> counterLock(deferredSignalLock);
-        while (deferredDeletionsPending != 0) {
-            deferredSignal.wait(counterLock);
-        }
-    }
+    TileCache(const TaggedScheduler&, size_t size = 0);
+    ~TileCache();
 
     /// Change the maximum size of the cache.
     void setSize(size_t);
@@ -50,6 +40,7 @@ private:
     std::map<OverscaledTileID, std::unique_ptr<Tile>> tiles;
     std::list<OverscaledTileID> orderedKeys;
     TaggedScheduler threadPool;
+    std::vector<std::unique_ptr<Tile>> pendingReleases;
     size_t deferredDeletionsPending{0};
     std::mutex deferredSignalLock;
     std::condition_variable deferredSignal;

@@ -5,6 +5,19 @@
 
 namespace mbgl {
 
+TileCache::TileCache(const TaggedScheduler& threadPool_, size_t size_)
+        : threadPool(threadPool_),
+          size(size_) {}
+
+TileCache::~TileCache() {
+    clear();
+
+    pendingReleases.clear();
+
+    std::unique_lock counterLock{deferredSignalLock};
+    deferredSignal.wait(counterLock, [&](){ return deferredDeletionsPending == 0; });
+}
+
 void TileCache::setSize(size_t size_) {
     MLN_TRACE_FUNC();
 
@@ -31,8 +44,8 @@ namespace {
 /// are retained for the duration of the scope instead of being destroyed immediately.
 template <typename T>
 struct CaptureWrapper {
-    CaptureWrapper(std::unique_ptr<T>&& item_)
-        : item(std::move(item_)) {}
+    CaptureWrapper(std::unique_ptr<T>&& item_) : item(std::move(item_)) {
+    }
     CaptureWrapper(const CaptureWrapper& other)
         : item(other.item) {}
     std::shared_ptr<T> item;
@@ -52,15 +65,18 @@ void TileCache::deferredRelease(std::unique_ptr<Tile>&& tile) {
     // by a waiting thread and is already complete, that temporary reference ends up being the
     // last one and the destruction actually occurs here on this thread.
     std::function<void()> func{[tile_{CaptureWrapper<Tile>{std::move(tile)}}, this]() mutable {
-        tile_.item = {};
+        MLN_TRACE_ZONE(release lambda);
+        tile_.item.reset();
 
-        std::lock_guard<std::mutex> counterLock(deferredSignalLock);
+        std::lock_guard counterLock{deferredSignalLock};
         deferredDeletionsPending--;
         deferredSignal.notify_all();
     }};
 
-    std::unique_lock<std::mutex> counterLock(deferredSignalLock);
-    deferredDeletionsPending++;
+    {
+        std::unique_lock counterLock{deferredSignalLock};
+        deferredDeletionsPending++;
+    }
 
     threadPool.schedule(std::move(func));
 }

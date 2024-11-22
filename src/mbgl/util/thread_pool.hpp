@@ -9,9 +9,9 @@
 
 #include <algorithm>
 #include <condition_variable>
+#include <deque>
 #include <map>
 #include <mutex>
-#include <queue>
 #include <ranges>
 #include <thread>
 #include <vector>
@@ -29,7 +29,10 @@ public:
     /// @param tag Identifier object to indicate ownership of `fn`, no tag indicates that the task is owned by the
     /// scheduler.
     /// @param fn Task to run
-    void schedule(const util::SimpleIdentity tag, std::function<void()>&& fn) override;
+    void schedule(util::SimpleIdentity tag, std::function<void()>&& fn) override;
+
+    // schedule multiple (with a single notify)
+    void schedule(util::SimpleIdentity, std::vector<std::function<void()>>&&) override;
 
     /// @brief Set the prefix used for thread names
     void setName(std::string str) { schedulerName = std::move(str); }
@@ -53,6 +56,8 @@ protected:
     void terminate();
     std::thread makeSchedulerThread(size_t index);
 
+    void schedule(util::SimpleIdentity, std::function<void()>*, std::size_t);
+
     /// @brief Wait until there's nothing pending or in process
     /// Must not be called from a task provided to this scheduler.
     /// @param tag Tag of the owner to identify the collection of tasks to
@@ -67,11 +72,11 @@ protected:
     MLN_TRACE_LOCKABLE(std::mutex, workerMutex);
     MLN_TRACE_LOCKABLE(std::mutex, taggedQueueMutex);
     util::ThreadLocal<ThreadedSchedulerBase> owningThreadPool;
-    std::atomic<std::uint32_t> taskCount{0};
+    std::uint32_t taskCount{0};
     std::string schedulerName;
     bool terminated{false};
 
-    using TaskQueue = std::queue<std::function<void()>>;
+    using TaskQueue = std::deque<std::function<void()>>;
 
     // Task queues bucketed by tag address
     struct Queue {
@@ -79,9 +84,9 @@ protected:
         MLN_TRACE_CONDITION_VAR cv;            /* queue empty condition */
         MLN_TRACE_LOCKABLE(std::mutex, mutex); /* lock */
         TaskQueue queue;                       /* queue for tasks */
+        bool closed{false};                    /* no new tasks should be added */
 
         bool empty() const { return queue.empty(); }
-        static bool queueEmpty(TaskQueue q) { return q.empty(); }
     };
     mbgl::unordered_map<util::SimpleIdentity, std::shared_ptr<Queue>> taggedQueue;
 };

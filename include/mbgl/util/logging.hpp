@@ -1,7 +1,7 @@
 #pragma once
 
 #include <mbgl/util/event.hpp>
-
+#include <mbgl/util/instrumentation.hpp>
 #include <mbgl/util/noncopyable.hpp>
 
 #include <memory>
@@ -66,6 +66,7 @@ public:
 
     template <typename... Args>
     static void Record(EventSeverity severity, Event event, Args&&... args) noexcept {
+        MLN_TRACE_FUNC();
         if (!includes(severity, disabledEventSeverities) && !includes(event, disabledEvents) &&
             !includes({severity, event}, disabledEventPermutations)) {
             record(severity, event, ::std::forward<Args>(args)...);

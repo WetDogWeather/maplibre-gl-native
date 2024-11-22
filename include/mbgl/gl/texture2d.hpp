@@ -36,9 +36,9 @@ public: // gfx::Texture2D
 
     void create() noexcept override;
 
-    void upload(const void* pixelData, const Size& size_) noexcept override;
-    void uploadSubRegion(const void* pixelData, const Size& size, uint16_t xOffset, uint16_t yOffset) noexcept override;
-    void upload() noexcept override;
+    void upload(const void* pixelData, const Size& size_, std::optional<std::size_t> threadIndex) override;
+    void uploadSubRegion(const void* pixelData, const Size& size, uint16_t xOffset, uint16_t yOffset, std::optional<std::size_t> threadIndex) override;
+    void upload(std::optional<std::size_t> threadIndex) override;
 
     bool needsUpload() const noexcept override { return !!image; };
 

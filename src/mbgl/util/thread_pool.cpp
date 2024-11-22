@@ -69,10 +69,12 @@ std::thread ThreadedSchedulerBase::makeSchedulerThread(const size_t threadIndex)
                     if (!q->empty()) {
                         // There's a thread-specific task pending
                         tasklet = std::move(q->queue.front());
-                        q->queue.pop();
+                        q->queue.pop_front();
                         assert(tasklet);
-                        [[maybe_unused]] const auto newCount = static_cast<std::ptrdiff_t>(--taskCount);
-                        assert(0 <= newCount);
+
+                        std::unique_lock workerLock{workerMutex};
+                        assert(0 < taskCount);
+                        --taskCount;
                     }
                     if (tasklet) {
                         ++q->runningCount;
@@ -126,12 +128,20 @@ void ThreadedSchedulerBase::schedule(std::function<void()>&& fn) {
     schedule(uniqueID, std::move(fn));
 }
 
-void ThreadedSchedulerBase::schedule(util::SimpleIdentity tag,
-                                     std::function<void()>&& fn) {
-    MLN_TRACE_FUNC();
-    assert(fn);
-    if (!fn) return;
+void ThreadedSchedulerBase::schedule(const util::SimpleIdentity tag, std::function<void()>&& fn) {
+    schedule(tag, &fn, 1);
+}
 
+void ThreadedSchedulerBase::schedule(const util::SimpleIdentity tag, std::vector<std::function<void()>>&& fs) {
+    schedule(tag, fs.data(), fs.size());
+    fs.clear();
+}
+
+void ThreadedSchedulerBase::schedule(util::SimpleIdentity tag, std::function<void()>* const functions, const std::size_t functionCount) {
+    MLN_TRACE_FUNC();
+    assert(std::all_of(functions, functions+functionCount, [](const auto& x) { return !!x; }));
+
+    // Use the scheduler's tag if none is specified
     tag = tag.isEmpty() ? uniqueID : tag;
 
     std::shared_ptr<Queue> q;
@@ -155,19 +165,27 @@ void ThreadedSchedulerBase::schedule(util::SimpleIdentity tag,
     {
         MLN_TRACE_ZONE(push);
         std::lock_guard lock{q->mutex};
-
-        [[maybe_unused]] const auto newCount = static_cast<std::ptrdiff_t>(++taskCount);
-        assert(newCount > 0);
-        MLN_ZONE_VALUE(newCount);
-
-        q->queue.push(std::move(fn));
+        if (q->closed) {
+            assert(false);  // Don't add tasks to a queue while waiting for it to become empty
+            return;
+        }
+        std::move(functions, functions+functionCount, std::back_inserter(q->queue));
     }
-
-    // Take the worker lock before notifying to prevent threads from waiting while we try to wake them
+    {
+        std::lock_guard workerLock{workerMutex};
+        taskCount += functionCount;
+        assert(taskCount >= functionCount);
+        MLN_ZONE_VALUE(taskCount);
+    }
+    // Wake up one more more threads to handle the new task(s)
+    // We don't need to hold `workerMutex` because all modifications to conditions are made within it
     {
         MLN_TRACE_ZONE(notify);
-        std::lock_guard workerLock{workerMutex};
-        cvAvailable.notify_one();
+        if (functionCount > 1) {
+            cvAvailable.notify_all();
+        } else {
+            cvAvailable.notify_one();
+        }
     }
 }
 
@@ -191,14 +209,14 @@ void ThreadedSchedulerBase::waitForEmpty(const util::SimpleIdentity tag) {
 
         {
             std::unique_lock queueLock{q->mutex};
-            while (!q->empty() || q->runningCount) {
-                q->cv.wait(queueLock);
-            }
+            q->closed = true;
+            q->cv.wait(queueLock, [&]{ return (q->empty() && q->runningCount == 0); });
         }
 
         // After waiting for the queue to empty, go ahead and erase it from the map.
         {
             std::lock_guard lock{taggedQueueMutex};
+            assert(q->empty());
             taggedQueue.erase(tagToFind);
         }
     }
