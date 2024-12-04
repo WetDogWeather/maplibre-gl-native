@@ -18,7 +18,6 @@ TileCache::~TileCache() {
     deferredSignal.wait(counterLock, [&]() { return deferredDeletionsPending == 0; });
 }
 
-
 void TileCache::setSize(size_t size_) {
     MLN_TRACE_FUNC();
 
@@ -38,7 +37,6 @@ void TileCache::setSize(size_t size_) {
 
     assert(orderedKeys.size() <= size);
 }
-
 
 void TileCache::deferredRelease(std::unique_ptr<Tile>&& tile) {
     MLN_TRACE_FUNC();
@@ -67,11 +65,11 @@ void TileCache::deferPendingReleases() {
     pendingReleases.clear();
     threadPool.schedule({[items{std::move(pending)}, this]() mutable {
         MLN_TRACE_ZONE(deferPendingReleases lambda);
-        MLN_ZONE_VALUE(wrap_.releases.size());
-            // Run the deletions
+        MLN_ZONE_VALUE(items.size());
+        // Run the deletions
         items.clear();
 
-            // Wake up a waiting destructor
+        // Wake up a waiting destructor
         std::lock_guard<std::mutex> counterLock(deferredSignalLock);
         deferredDeletionsPending--;
         deferredSignal.notify_all();

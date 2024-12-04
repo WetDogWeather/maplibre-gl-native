@@ -124,6 +124,7 @@ target_link_libraries(
         Mapbox::Map
         mbgl-compiler-options
         Mapbox::Base::cheap-ruler-cpp
+        mbgl-vendor-nontype_functional
 )
 
 if(NOT WIN32 AND MLN_WITH_OPENGL)
