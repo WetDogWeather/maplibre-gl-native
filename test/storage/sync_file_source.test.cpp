@@ -19,7 +19,7 @@ using namespace mbgl;
 class SyncFileSource : public FileSource {
 public:
     std::unique_ptr<AsyncRequest> request(const Resource& resource,
-                                          CopyableCallback<void(Response)>&& callback) override {
+                                          CopyableCallback<void(Response)> callback) override {
         Response response;
         auto it = assets.find(resource.url);
         if (it == assets.end()) {

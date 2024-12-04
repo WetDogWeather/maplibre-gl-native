@@ -33,7 +33,7 @@ public:
         std::list<FakeFileRequest*>::iterator link;
 
         FakeFileRequest(Resource resource_,
-                        CopyableCallback<void(Response)>&& callback_,
+                        CopyableCallback<void(Response)> callback_,
                         std::list<FakeFileRequest*>& list_)
             : resource(std::move(resource_)),
               callback(std::move(callback_)),
@@ -50,7 +50,7 @@ public:
         : FakeFileSource(ResourceOptions::Default(), ClientOptions()) {}
 
     std::unique_ptr<AsyncRequest> request(const Resource& resource,
-                                          CopyableCallback<void(Response)>&& callback) override {
+                                          CopyableCallback<void(Response)> callback) override {
         return std::make_unique<FakeFileRequest>(resource, std::move(callback), requests);
     }
 
@@ -93,7 +93,7 @@ public:
         : FakeFileSource(resourceOptions_, clientOptions_) {}
 
     std::unique_ptr<AsyncRequest> request(const Resource& resource,
-                                          CopyableCallback<void(Response)>&& callback) override {
+                                          CopyableCallback<void(Response)> callback) override {
         return FakeFileSource::request(resource, std::move(callback));
     }
 

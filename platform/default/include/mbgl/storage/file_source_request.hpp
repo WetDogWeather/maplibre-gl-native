@@ -13,7 +13,7 @@ class Mailbox;
 
 class FileSourceRequest final : public AsyncRequest {
 public:
-    FileSourceRequest(FileSource::CopyableCallback<void(Response)>&& callback);
+    FileSourceRequest(FileSource::CopyableCallback<void(Response)> callback);
     ~FileSourceRequest() final;
 
     void onCancel(std::function<void()>&& callback);

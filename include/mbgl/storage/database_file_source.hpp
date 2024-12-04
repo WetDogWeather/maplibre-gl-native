@@ -16,7 +16,7 @@ public:
     ~DatabaseFileSource() override;
 
     /// FileSource overrides
-    std::unique_ptr<AsyncRequest> request(const Resource&, CopyableCallback<void(Response)>&&) override;
+    std::unique_ptr<AsyncRequest> request(const Resource&, CopyableCallback<void(Response)>) override;
     void forward(const Resource&, const Response&, Scheduler::Task&& callback) override;
     bool canRequest(const Resource&) const override;
     void setProperty(const std::string&, const mapbox::base::Value&) override;

@@ -1,15 +1,15 @@
 #pragma once
 
-#include <mbgl/tile/tile_id.hpp>
-#include <mbgl/util/font_stack.hpp>
-#include <mbgl/text/glyph_range.hpp>
-#include <mbgl/tile/tile_operation.hpp>
+#include <mbgl/actor/scheduler.hpp>
 #include <mbgl/gfx/backend.hpp>
 #include <mbgl/shaders/shader_source.hpp>
+#include <mbgl/text/glyph_range.hpp>
+#include <mbgl/tile/tile_id.hpp>
+#include <mbgl/tile/tile_operation.hpp>
+#include <mbgl/util/font_stack.hpp>
 
 #include <cstdint>
 #include <exception>
-#include <functional>
 #include <string>
 
 namespace mbgl {

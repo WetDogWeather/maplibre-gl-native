@@ -208,7 +208,7 @@ DatabaseFileSource::DatabaseFileSource(const ResourceOptions& resourceOptions, c
 DatabaseFileSource::~DatabaseFileSource() = default;
 
 std::unique_ptr<AsyncRequest> DatabaseFileSource::request(const Resource& resource,
-                                                          CopyableCallback<void(Response)>&& callback) {
+                                                          CopyableCallback<void(Response)> callback) {
     auto req = std::make_unique<FileSourceRequest>(std::move(callback));
     impl->actor().invoke(&DatabaseFileSourceThread::request, resource, req->actor());
     return req;

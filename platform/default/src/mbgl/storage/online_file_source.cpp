@@ -320,7 +320,7 @@ public:
               resourceOptions.clone(),
               clientOptions.clone())) {}
 
-    std::unique_ptr<AsyncRequest> request(CopyableCallback<void(Response)>&& callback, Resource res) {
+    std::unique_ptr<AsyncRequest> request(CopyableCallback<void(Response)> callback, Resource res) {
         auto req = std::make_unique<FileSourceRequest>(std::move(callback));
         req->onCancel(
             [actorRef = thread->actor(), req = req.get()]() { actorRef.invoke(&OnlineFileSourceThread::cancel, req); });
@@ -617,7 +617,7 @@ OnlineFileSource::OnlineFileSource(const ResourceOptions& resourceOptions, const
 OnlineFileSource::~OnlineFileSource() = default;
 
 std::unique_ptr<AsyncRequest> OnlineFileSource::request(const Resource& resource,
-                                                        CopyableCallback<void(Response)>&& callback) {
+                                                        CopyableCallback<void(Response)> callback) {
     Resource res = resource;
     const TileServerOptions options = impl->getResourceOptions().tileServerOptions();
 
