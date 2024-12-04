@@ -1474,7 +1474,6 @@ target_link_libraries(
         mbgl-vendor-earcut.hpp
         mbgl-vendor-eternal
         $<$<BOOL:${MLN_WITH_METAL}>:mbgl-vendor-metal-cpp>
-        mbgl-vendor-nontype_functional
         mbgl-vendor-parsedate
         mbgl-vendor-polylabel
         mbgl-vendor-protozero
@@ -1488,6 +1487,7 @@ target_link_libraries(
         Mapbox::Base::geojson.hpp
         Mapbox::Base::geometry.hpp
         Mapbox::Base::variant
+        mbgl-vendor-nontype_functional
         $<$<BOOL:${MLN_USE_TRACY}>:TracyClient>
         unordered_dense
 )
