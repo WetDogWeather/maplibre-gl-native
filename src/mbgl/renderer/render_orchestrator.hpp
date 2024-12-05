@@ -152,7 +152,7 @@ public:
             return;
         }
         if (!scheduler) {
-            const std::optional<std::size_t> threadIndex{};
+            constexpr std::optional<std::size_t> threadIndex{};
             if (reversed) {
                 visitLayerGroupsReversed([&](auto& group, auto layerIndex) { f(group, threadIndex, layerIndex); });
             } else {
@@ -167,23 +167,12 @@ public:
         eachGroup(reversed, [&](auto& group) { groups.push_back(group); });
         assert(groups.size() == layerCount);
 
-        // Use different threads to render a given layer in subsequent frames, to ensure that
-        // we don't have problems due to objects cached from previous frames being used on a
-        // different thread.
-#ifndef NDEBUG
-        const bool reverseThreads = rand() & 1;
-#endif
-
         // Submit one task to each available thread, running the function
         // on the corresponding items in each group in the specified order.
         const auto threadCount = scheduler->getThreadCount();
         scheduler->eachThread([&, threadCount, layerCount, reversed](const auto threadIndex_) {
-            if (threadIndex_) {
-#ifndef NDEBUG
-                const auto threadIndex = reverseThreads ? threadCount - *threadIndex_ - 1 : *threadIndex_;
-#else
-                const auto threadIndex = *threadIndex_;
-#endif
+            const auto threadIndex = threadIndex_ ? *threadIndex_ + 1 : 0;
+            if (threadIndex < threadCount) {
                 const auto minIndex = threadIndex * layerCount / threadCount;
                 const auto maxIndex = (threadIndex + 1) * layerCount / threadCount;
                 for (auto i = minIndex; i != maxIndex; ++i) {
