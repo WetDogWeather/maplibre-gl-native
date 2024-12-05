@@ -162,6 +162,15 @@ void ThreadedSchedulerBase::schedule(util::SimpleIdentity tag, std::function<voi
         q = result.first->second;
     }
 
+    // Increment the task count before adding tasks, or it can briefly go negative.
+    // This is done within the mutex as required by the condition variable.
+    {
+        std::lock_guard workerLock{workerMutex};
+        taskCount += functionCount;
+        assert(taskCount >= functionCount);
+        MLN_ZONE_VALUE(taskCount);
+    }
+
     {
         MLN_TRACE_ZONE(push);
         std::lock_guard lock{q->mutex};
@@ -171,12 +180,7 @@ void ThreadedSchedulerBase::schedule(util::SimpleIdentity tag, std::function<voi
         }
         std::move(functions, functions+functionCount, std::back_inserter(q->queue));
     }
-    {
-        std::lock_guard workerLock{workerMutex};
-        taskCount += functionCount;
-        assert(taskCount >= functionCount);
-        MLN_ZONE_VALUE(taskCount);
-    }
+
     // Wake up one more more threads to handle the new task(s)
     // We don't need to hold `workerMutex` because all modifications to conditions are made within it
     {
