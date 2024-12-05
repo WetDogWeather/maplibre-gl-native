@@ -91,6 +91,46 @@ void Renderer::Impl::setObserver(RendererObserver* observer_) {
     observer = observer_ ? observer_ : &nullObserver();
 }
 
+#if MLN_DRAWABLE_RENDERER
+namespace {
+/// Ensures that a `BackendScope` exists on any thread where rendering is being done, and
+/// that the global UBOs are bound on each thread context at the beginning of each frame.
+class LazyInit {
+    const std::size_t threadCount;
+    gfx::Context& context;
+    gfx::RendererBackend& backend;
+    std::optional<std::mutex> mutex;
+    mbgl::unordered_map<std::thread::id, gfx::BackendScope> threadScopes;
+    std::vector<bool> globalsInitialized;
+
+public:
+    LazyInit(Scheduler* scheduler, gfx::RendererBackend& backend_, gfx::Context& context_) :
+        threadCount(scheduler ? scheduler->getThreadCount() : 0),
+        context(context_), backend(backend_), globalsInitialized(threadCount) {
+        if (threadCount) {
+            threadScopes.reserve(threadCount);
+            mutex.emplace();
+        }
+    }
+    void operator()(std::optional<std::size_t> threadIndex, const std::unique_ptr<gfx::RenderPass>& pass) {
+        // Ensure that a backend scope exists on each thread
+        if (threadCount && !gfx::BackendScope::exists()) {
+            const auto threadId = std::this_thread::get_id();
+            std::unique_lock lock(*mutex);
+            threadScopes.try_emplace(threadId, backend, gfx::BackendScope::ScopeType::Implicit);
+        }
+        if (pass && (!threadIndex || (threadIndex && !globalsInitialized[*threadIndex]))) {
+            MLN_TRACE_ZONE(globals);
+            context.bindGlobalUniformBuffers(*pass, threadIndex);
+            if (threadIndex) {
+                globalsInitialized[*threadIndex] = true;
+            }
+        }
+    }
+};
+}
+#endif
+
 void Renderer::Impl::render(const RenderTree& renderTree,
                             [[maybe_unused]] const std::shared_ptr<UpdateParameters>& updateParameters) {
     MLN_TRACE_FUNC();
@@ -216,6 +256,9 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         threadParameters.emplace_back(parameters);
         threadParameters.back().renderThreadIndex = i;
     }
+    const auto getParams = [&](const std::optional<std::size_t> threadIndex) -> PaintParameters& {
+        return threadIndex ? threadParameters[*threadIndex] : parameters;
+    };
 
     const auto defaultDepthRangeSize = 1.0f - static_cast<float>(layerCount + 2) * PaintParameters::numSublayers *
                                                   PaintParameters::depthEpsilon;
@@ -229,15 +272,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 #endif
 
 #if MLN_DRAWABLE_RENDERER
-    mbgl::unordered_map<std::thread::id, gfx::BackendScope> threadScopes;
-    std::mutex threadScopesMutex;
-    const auto initScope = [&] {
-        if (!gfx::BackendScope::exists()) {
-            std::unique_lock<std::mutex> lock(threadScopesMutex);
-            threadScopes.try_emplace(
-                std::this_thread::get_id(), parameters.backend, gfx::BackendScope::ScopeType::Implicit);
-        }
-    };
+    LazyInit lazyInit(renderThreadPool, parameters.backend, context);
 #endif
 
     // - UPLOAD PASS -------------------------------------------------------------------------------
@@ -271,9 +306,6 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
     orchestrator.processChanges();
 
-    const auto getParams = [&](const std::optional<std::size_t> threadIndex) -> PaintParameters& {
-        return threadIndex ? threadParameters[*threadIndex] : parameters;
-    };
     // Upload layer groups
     {
         MLN_TRACE_ZONE(upload);
@@ -301,7 +333,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         // Give the layers a chance to upload
         orchestrator.visitLayerGroups(nullptr, [&](auto& layerGroup, const auto threadIndex, auto layerIndex) {
             MLN_TRACE_ZONE(upload);
-            initScope();
+            lazyInit(threadIndex, parameters.getRenderPass());
             auto& params = getParams(threadIndex);
             params.currentLayer = layerIndex;
             layerGroup.upload(*uploadPass, params);
@@ -342,7 +374,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         if (parameters.staticData.has3D) {
             parameters.staticData.backendSize = parameters.backend.getDefaultRenderable().getSize();
 
-            const auto debugGroup(parameters.getEncoder()->createDebugGroup(/*render thread*/ {}, "common-3d"));
+            [[maybe_unused]] const auto debugGroup = parameters.getEncoder()->createDebugGroup(/*render thread*/ {}, "common-3d");
             parameters.pass = RenderPass::Pass3D;
 
             // TODO is this needed?
@@ -358,7 +390,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
 #if MLN_DRAWABLE_RENDERER
     const auto drawable3DPass = [&] {
-        const auto debugGroup(parameters.getEncoder()->createDebugGroup(/*render thread*/ {}, "drawables-3d"));
+        [[maybe_unused]] const auto debugGroup = parameters.getEncoder()->createDebugGroup(/*render thread*/ {}, "drawables-3d");
         assert(parameters.pass == RenderPass::Pass3D);
 
         // draw layer groups, 3D pass
@@ -371,13 +403,13 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
 #if MLN_LEGACY_RENDERER
     const auto renderLayer3DPass = [&] {
-        const auto debugGroup(parameters.getEncoder()->createDebugGroup(/*render thread*/ {}, "3d"));
+        [[maybe_unused]] const auto debugGroup = parameters.getEncoder()->createDebugGroup(/*render thread*/ {}, "3d");
         int32_t i = static_cast<int32_t>(layerRenderItems.size()) - 1;
         for (auto it = layerRenderItems.begin(); it != layerRenderItems.end() && i >= 0; ++it, --i) {
             parameters.currentLayer = i;
             const RenderItem& renderItem = it->get();
             if (renderItem.hasRenderPass(parameters.pass)) {
-                const auto layerDebugGroup(parameters.getEncoder()->createDebugGroup({}, renderItem.getName()));
+                [[maybe_unused]] const auto layerDebugGroup = parameters.getEncoder()->createDebugGroup({}, renderItem.getName());
                 renderItem.render(parameters);
             }
         }
@@ -416,13 +448,13 @@ void Renderer::Impl::render(const RenderTree& renderTree,
     // Drawables
     const auto drawableOpaquePass = [&] {
         MLN_TRACE_ZONE(opaque);
-        const auto debugGroup(parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "drawables-opaque"));
+        [[maybe_unused]] const auto debugGroup = parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "drawables-opaque");
 
         // draw layer groups, opaque pass
         orchestrator.visitLayerGroups(
             renderThreadPool, /*reversed=*/true, [&](auto& layerGroup, auto threadIndex, auto layerIndex) {
                 MLN_TRACE_ZONE(opaque);
-                initScope();
+                lazyInit(threadIndex, parameters.getRenderPass());
                 auto& params = getParams(threadIndex);
                 params.currentLayer = layerCount - layerIndex - 1;
                 params.pass = RenderPass::Opaque;
@@ -433,13 +465,13 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
     const auto drawableTranslucentPass = [&] {
         MLN_TRACE_ZONE(translucent);
-        const auto debugGroup(
-            parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "drawables-translucent"));
+        [[maybe_unused]] const auto debugGroup=
+            parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "drawables-translucent");
 
         // draw layer groups, translucent pass
         orchestrator.visitLayerGroups(renderThreadPool, [&](auto& layerGroup, auto threadIndex, auto layerIndex) {
             MLN_TRACE_ZONE(translucent);
-            initScope();
+            lazyInit(threadIndex, parameters.getRenderPass());
             auto& params = getParams(threadIndex);
             params.currentLayer = layerCount - layerIndex - 1;
             params.pass = RenderPass::Translucent;
@@ -464,7 +496,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 #if MLN_LEGACY_RENDERER
     // Render everything top-to-bottom by using reverse iterators. Render opaque objects first.
     const auto renderLayerOpaquePass = [&] {
-        const auto debugGroup(parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "opaque"));
+        [[maybe_unused]] const auto debugGroup = parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "opaque");
         parameters.pass = RenderPass::Opaque;
         parameters.depthRangeSize = 1 - (layerRenderItems.size() + 2) * PaintParameters::numSublayers *
                                             PaintParameters::depthEpsilon;
@@ -474,7 +506,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
             parameters.currentLayer = i;
             const RenderItem& renderItem = it->get();
             if (renderItem.hasRenderPass(parameters.pass)) {
-                const auto layerDebugGroup(parameters.getRenderPass()->createDebugGroup({}, renderItem.getName()));
+                [[maybe_unused]] const auto layerDebugGroup = parameters.getRenderPass()->createDebugGroup({}, renderItem.getName());
                 renderItem.render(parameters);
             }
         }
@@ -482,7 +514,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
 
     // Make a second pass, rendering translucent objects. This time, we render bottom-to-top.
     const auto renderLayerTranslucentPass = [&] {
-        const auto debugGroup(parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "translucent"));
+        [[maybe_unused]] const auto debugGroup = parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "translucent");
         parameters.pass = RenderPass::Translucent;
         parameters.depthRangeSize = 1 - (layerRenderItems.size() + 2) * PaintParameters::numSublayers *
                                             PaintParameters::depthEpsilon;
@@ -492,7 +524,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
             parameters.currentLayer = i;
             const RenderItem& renderItem = it->get();
             if (renderItem.hasRenderPass(parameters.pass)) {
-                const auto layerDebugGroup(parameters.getRenderPass()->createDebugGroup({}, renderItem.getName()));
+                [[maybe_unused]] const auto layerDebugGroup = parameters.getRenderPass()->createDebugGroup({}, renderItem.getName());
                 renderItem.render(parameters);
             }
         }
@@ -504,7 +536,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
         MLN_TRACE_ZONE(debug);
         // Renders debug overlays.
         {
-            const auto debugGroup(parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "debug"));
+            [[maybe_unused]] const auto debugGroup = parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "debug");
             orchestrator.visitDebugLayerGroups(
                 [&](LayerGroupBase& layerGroup) { layerGroup.render(orchestrator, parameters); });
         }
@@ -515,7 +547,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
     const auto renderDebugOverlays = [&] {
         // Renders debug overlays.
         {
-            const auto debugGroup(parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "debug"));
+            [[maybe_unused]] const auto debugGroup = parameters.getRenderPass()->createDebugGroup(/*render thread*/ {}, "debug");
 
             // Finalize the rendering, e.g. by calling debug render calls per tile.
             // This guarantees that we have at least one function per tile called.
@@ -549,15 +581,7 @@ void Renderer::Impl::render(const RenderTree& renderTree,
     drawableTargetsPass();
     commonClearPass();
 
-    // Bind the globals on each thread/encoder where they will be used
-    if (renderThreadPool) {
-        renderThreadPool->eachThread([&](auto threadIndex) {
-            MLN_TRACE_ZONE(globals);
-            context.bindGlobalUniformBuffers(*parameters.getRenderPass(), threadIndex);
-        });
-    } else {
-        context.bindGlobalUniformBuffers(*parameters.getRenderPass(), {});
-    }
+    lazyInit({}, parameters.getRenderPass());
 
     drawableOpaquePass();
     drawableTranslucentPass();
