@@ -355,25 +355,170 @@ TODO: Get more of an explantion from Tim.
 
 ### Line Render Layer
 
+Lines are important in vector maps.  We use them for roads, we use two of them to make a road casing, we outline things with them, they form very narrow wires and we'll drap textures on them to make things like railroads.  They do a lot of work for a map and are more complex than they might seen.
+
+Even with OpenGL MapLibre couldn't just fall back to the driver line implementation.  They needed really wide lines, beyond what most drivers would provide, they needed to run textures down the middle, and they wanted fancier turns.  Thus a custom Line implementation.
+
+The Line Layer will build geometry for the Line Render layer by widening the lines and building vertices and triangles to represent them.  The Line Bucket does this working, producing vertex attributes that can then be wrapped by a Drawable in the Line Render Layer.
+
+Lines are expandable with width defined at run time.  One of the most common style expressions is a zoom based width calculation.  Thus the geometry and the shader to facilitate that is a little complex.  There are four variants with four different shaders.
+
+#### Simple Line
+
+This one is pretty simple and just implements a width controlled single color line.  It's mostlyused for roads.
+
+#### Gradient Line
+
+This variant uses texture coordinates to drive a gradient texture along the line, but is otherwise the same.
+
+#### SDF Line
+
+SDF refers to Signed Distance Field and this is the Line Glyph renderer.  If you put text along a line it's being rendered here.
+Question: Is this right?
+
+#### Pattern Line
+
+If a line has a pattern, like a railroad for example, it's a line with a repeating texture and implemented by this variant of the Line.
+
+#### New Wide Lines
+
+We talk about this more in the Misc section, but there is a newer implementation of Wide Vectors.  It's based on a more GPU forward approach, but does not implement all the features necessary to replace the Line Layer.
+
+### Raster Render Layer
+
+This Layer handles both the image per tile case for a traditional raster map and the case of a single image dropped at a specific location.
+
+Figure: Picture of Raster in action
+
+Most of the interesting logic in the Raster Layer is associated with loading.  When a tile comes in to view, MapLibre needs to load it.  When that happens, the image is handed back to the Raster Layer and our part starts.
+
+The image itself is converted to a texture and uploaded to the Rendering SDK.  Unfortunately this happens on the main (render) thread.
+
+The way it does work is the Raster Layer sets up an ImageLayer Group so it can apply a UBO to all the Drawables beneath it.  We get one Drawable per image tile that represents a rectangle and sub-rectangles to mask loading.
+
+One of the more complicated bits is the mask used to update vertex arrays on the fly.  When the toolkit is loading new higher resolution tiles, it will turn off the rectangles for a high res tile that's loaded while it's still loading the others.
+
+Image a Level 4 tile.  The system has loaded two Level 5 tiles and is waiting for two more.  Rather than wait for them all, it will turn off two pieces of the Level 4 tile and draw the Level 5 tiles.  This is what masks do and they're a bit complicated in implementation.
+
+As an aside, before interacting with MapLibre Native I was curious how they addressed problems like texture proliferation, running multiple Raster Layers at once, batching uploads, and multiple Raster Layers running at different resolutions with different loading parameters.  The answer it turns out, is they don't.  MapLibre is very much a vector map toolkit and there's a lot of room for improvement of the Raster Layer.
+
 ### Heatmap Render Layer
+
+Heatmaps are interesting in that they're a layer derived from data and have to be rendered in a two step process.  This was a really great idea, but it's implemented in a "one off" way that doesn't let us reuse any of the concepts elsewhere.
+
+Figure: Heatmap Example
+
+The way it does work is the Render Layer sets up one Render Target for the whole screen.  Those are described below, but the short version is we draw to a Render Target.  That target is the size of the visible screen.
+
+For each tile in the Heatmap the Layer adds a drawable to then Render Target which uses the heatmap shader.  That shader draws objects into Render Target as values, rather than visuals.  
+
+From that Render Target the Layer uses the heatmap__texture shader to do a bit of filtering and draw the results to the screen in a visible way.
 
 ### Hillshade Render Layer
 
+The Hillshade layer draws elevation data in tiled form to the screen.
+
+Figure: Hillshade Example
+
+It mimics some of the same Raster Layer logic for loading and masking.  Really, this whole part of MapLibre could use a consolidation and rewrite.  There are some great concepts in here that aren't reused well.
+
+What the Hillshade data does do is manipula DEM data.  These are tiles of Digital Elevation Models and each pixel is an elevation rather than a color.  To draw these properly you need a little border around each DEM and the Layer handles backfilling those as they load.
+
+The Layer sets up one texture per tile and uses a Render Target and a Drawable to render the DEM data for that tile directly to an output textures.  This uses a custom shader that turned elevation into color (and shading).
+
+Hillshade Buckets build the actual geometry and are marked dirty when neighboring buckets load to deal with the edge problems and to rerender to individual target textures.
+
+Those textures are already on the GPU side and so don't have to be uploaded.  They are tied in with a Drawable per tile and all drawn together into the visible target using a fairly generic shader.
+
 ## Render Targets
+
+Render Targets as a general concept go something like this.  Developers tend to think of rendering SDKs as drawing to the screen, but they don't have to.  Sometimes they draw to memory and that memory is used for something else.  It may be part of a multi-stage pipeline that eventually leads to the screen, or it may not.
+
+A Render Target is where we're pointing MapLibre and that is generally the screen, but sometimes it's not.  As in the Heatmap example, we're drawing in two stages.  The first is drawing data and the second is drawing that data to the screen.  A Render Target for each tile is what we're drawing to in that first step.
+
+In MapLibre Render Targets are only used in a few places and aren't terribly flexible.  It would be useful to open that up and let the developers establish their own pipelines, but that's not possible at the moment.
+
+As to how they work, you can create a low level Render Target with one or more textures for color, depth, and possibly stencil.  We also associate a Layer Group with that render target and we can put Drawables in there to be drawn every frame.
 
 ## Texture Atlas
 
+The idea of a texture atlas is pretty similar to a sprite sheet.  You take a whole bunch of images and you glue them together into one big image.  Then instead of referencing one image for a symbol, say, you create a handle which gives you an (x,y) offset and a size.
+
+As to why you do that, it depends.  For sprite sheets it's more efficient to move one big image around than a bunch of small images.  For textures in a rendering SDK it's a matter of memory access and efficiency.  It's faster to have one big texture than a lot of little ones.  It's also easier to refence one texture than it is 10 or 20 in a shader.
+
+The Atlases themselves are built in the tile loading phase.  When parsing a tile and building individual layers, MapLibre will construct a unique Atlas for a given purpose, copying out or generating images as need, packing them together and presenting a single image for that purpose.
+
+The main (or render) thread will take that Atlas image and upload it during the Upload phase of a given Render Layer.  When the tile is unloaded, the Atlas will be destroyed.
+
+What's good about this approach is we can know that there's only one texture in a given Render Layer being used for an Atlas.  This simplified geometry grouping logic and the shaders.
+
+Question: Do the render layers share Altases within a tile?
+
+What's bad about this approach is the upper limit on texture size and the copying.  If a given render layer exceeds the amount of space used for a texture you're just out of luck.  As for copying, multiple tiles will have the same images in their Atlases without sharing.
+
+The way vector maps are currently structure, neither issue comes up.  The symbols tend to be small and cartographers don't use many of them.  This could become a problem if geospecific textures became popular.
+
+Texture Atlas is the base concept, but the actual implementations are for Glyph, Icon, and Pattern.  Each of those is discussed below.
+
 ### Glyph Atlas
+
+Logically enough, the Glyph Atlas contains all the glyphs used in a tile.  The glyphs are a little funny, as they're not simple images for characters.  They're [signed distance fields](https://en.wikipedia.org/wiki/Signed_distance_function).  This has a number of odd consequences.
+
+All the various platforms MapLibre Native runs on can generate glyphs for us, but we use none of it.  Instead we read the glyphs from sprite sheets constructed as signed distance fields.  There are a lot of downsides to that, but it was built into the architecture of the web version and they ported that over to mobile at the time.
+
+For the moment, this is what MapLibre Native does and so we support these.
+
+The Glyph Atlas is built per tile in the Geometry Worker and then uploaded on the main (render) thread after the whole tile is handed over to the main (render) thread.
+
+Like all the Atlases there's no sharing between tiles and each tile creates its own.
 
 ### Icon Atlas
 
+Icons Atlases are much like Glyph Atlases but for icons.  The icons themselves come out of sprite sheets, begging the question why we don't just leave them there, but this is the current architecture.
+
+Icon Atlases are built per tile and also uploaded on the main (render) thread.
+
+There ever never very many of these, so upload doesn't appear to take much time.
+
 ### Pattern Atlas
+
+This Atlas is a bit different from the others in that it contains the generated patterns used for things like dots and dashes.
+
+Figure: Example of dashes
+
+The Pattern Atlas is global, with subregion uploads and deletions happening on the main thread as requested by background threads when they merge back into the main (render) thread.
+
+In theory the Pattern Atlas can run out of room, but practically speaking cartographers use patterns sparingly in their vector maps.
 
 ## Custom Layers
 
+Custom Layers are, colloquially speaking, plugins.  It used to be that plugins had to be loaded from storage at run-time, but now we refer to anything that can be inserted into an existing toolkit without recompiling as a plugin.  I honestly can't think of a better word, so Custom Layers are plugins.
+
+Their purpose is to add very specific rendering to the map, to draw something that MapLibre can't do.  At our company, Wet Dog Weather, we use Custom Layers to draw weather overlays.  There's a whole complicated pipeline behind that which just intersects with MapLibre at the Custom Layer level.
+
+A really obvious use for the Custom Layer is a user location overlay.  The puck, it's called.  It needs to be updated every frame and you can do that with a native mobile implementation (e.g. UIKit), but it's going to work better and faster if you render it locally.
+
+Early in our development of Metal we had wanted to greatly expand the Custom Layer implementation.  Both to allow outside developers to add new functionality, possibly replace existing functionality and maybe even implement MapLibre Layers in shared functionality we could all use.  It didn't work out that way.
+
+There are two kinds of custom layers, one platform specific and one not.
+
 ### Custom Layer: Platform Specific
 
+The platform specific layers target OpenGL or Metal directly.  If you want to draw with those rendering SDKs you need to pick the right one and implement your specific rendering in the callback given.
+
+In concept this is simple enough.  For Metal you're getting Command Buffer.  For OpenGL you get a context.  MapLibre also provides information about the current model/view/projection matrix and enough context to make it all work.  You can do what you like from there.
+
+What we don't provide is access to all the various internals to make your full Layers.  You really have to do all the work yourself, but this still works quite well if the developer knows what they're doing.
+
+The best way to approach Platform Specific Custom Layers is to look at the examples which can be found in the test apps.
+
 ### Custom Drawable Layer: Platform Agnostic
+
+When everything was OpenGL, the Custom Layer for OpenGL was all you needed.  Now that we support Vulkan, Metal, and OpenGL developers have to implement in all three if they want full support for their custom functionality.  The Custom Drawable Layer was meant to fix that and is partially implemented.
+
+The idea here was that developers could insert their own Custom Layer at the C++ level that would run on any platform.  That Custom Layer would build Drawable geometry and pass it off to the system to render and manage.  In this way developers could add real time layers that work cross platform and only things like the user puck once.
+
+The implementation for Custom Drawable Layers was never completed, but it can support simple symbols and polylines.  We hope to build it out a bit more in the future.
 
 ## Render Orchestrator
 
