@@ -3,6 +3,8 @@
 #include <mbgl/util/instrumentation.hpp>
 #include <mbgl/util/logging.hpp>
 
+#include <mlt/decoder.hpp>
+
 namespace mbgl {
 
 VectorTileFeature::VectorTileFeature(const mapbox::vector_tile::layer& layer, const protozero::data_view& view)

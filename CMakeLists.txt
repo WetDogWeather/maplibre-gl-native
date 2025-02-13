@@ -1460,6 +1460,16 @@ include(${PROJECT_SOURCE_DIR}/vendor/unordered_dense.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/vector-tile.cmake)
 include(${PROJECT_SOURCE_DIR}/vendor/wagyu.cmake)
 
+include(FetchContent)
+set(MLT_WITH_JSON OFF CACHE BOOL "No JSON support" FORCE)
+fetchcontent_declare(mlt-cpp
+        GIT_REPOSITORY https://github.com/WetDogWeather/maplibre-tile-spec.git
+        GIT_TAG 8158d314aabc8bb4e1899e1707c0d2b5dff06dbb
+        SOURCE_SUBDIR cpp
+        EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(mlt-cpp)
+
 if(MLN_USE_RUST)
 include(${PROJECT_SOURCE_DIR}/rustutils/rustutils.cmake)
 endif()
@@ -1486,6 +1496,7 @@ target_link_libraries(
         mbgl-vendor-wagyu
         $<$<BOOL:${MLN_WITH_METAL}>:mbgl-vendor-metal-cpp>
         $<IF:$<BOOL:${MLN_USE_RUST}>,mbgl-rustutils,mbgl-vendor-csscolorparser>
+        mlt-cpp
     PUBLIC
         Mapbox::Base
         Mapbox::Base::Extras::expected-lite
@@ -1526,6 +1537,9 @@ set(EXPORT_TARGETS
     mbgl-vendor-unique_resource
     mbgl-vendor-vector-tile
     mbgl-vendor-wagyu
+    mlt-cpp
+    protozero
+    FastPFOR
     unordered_dense
 )
 
