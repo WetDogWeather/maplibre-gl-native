@@ -4,11 +4,17 @@
 #include <mbgl/util/logging.hpp>
 
 #include <mlt/decoder.hpp>
+#include <protozero/pbf_message.hpp>
+#include <mlt/metadata/tileset_protozero.hpp>
 
 namespace mbgl {
 
 VectorTileFeature::VectorTileFeature(const mapbox::vector_tile::layer& layer, const protozero::data_view& view)
-    : feature(view, layer) {}
+    : feature(view, layer) {
+
+    auto metadata = mlt::metadata::tileset::read({});
+    auto decoder = mlt::decoder::Decoder();
+}
 
 FeatureType VectorTileFeature::getType() const {
     switch (feature.getType()) {

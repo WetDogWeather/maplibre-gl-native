@@ -1529,8 +1529,6 @@ set(EXPORT_TARGETS
     mbgl-vendor-vector-tile
     mbgl-vendor-wagyu
     mlt-cpp
-    protozero
-    FastPFOR
     unordered_dense
 )
 
