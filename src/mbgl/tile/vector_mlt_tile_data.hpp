@@ -8,10 +8,10 @@
 #include <utility>
 
 namespace mlt {
-    class MapLibreTile;
-    class Feature;
-    class Layer;
-}
+class MapLibreTile;
+class Feature;
+class Layer;
+} // namespace mlt
 
 namespace mbgl {
 using MapLibreTile = mlt::MapLibreTile;

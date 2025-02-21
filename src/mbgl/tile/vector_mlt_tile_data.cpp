@@ -4,16 +4,17 @@
 #include <mbgl/util/instrumentation.hpp>
 #include <mbgl/util/logging.hpp>
 
-#if ANDROID
 #include <mlt/decoder.hpp>
 #include <mlt/metadata/tileset_protozero.hpp>
-#endif
 
 namespace mbgl {
 
-VectorMLTTileFeature::VectorMLTTileFeature(std::shared_ptr<const MapLibreTile> tile_, const mlt::Feature& feature_, std::uint32_t extent_)
-    : tile(std::move(tile_)), feature(feature_), extent(extent_) {
-}
+VectorMLTTileFeature::VectorMLTTileFeature(std::shared_ptr<const MapLibreTile> tile_,
+                                           const mlt::Feature& feature_,
+                                           std::uint32_t extent_)
+    : tile(std::move(tile_)),
+      feature(feature_),
+      extent(extent_) {}
 
 FeatureType VectorMLTTileFeature::getType() const {
     using mlt::metadata::tileset::GeometryType;
@@ -43,9 +44,11 @@ struct PropertyVisitor {
     Value operator()(std::string_view value) const { return std::string(value); }
 
     template <typename T>
-    Value operator()(std::optional<T> value) const { return value ? operator()(*value) : nullptr; }
+    Value operator()(std::optional<T> value) const {
+        return value ? operator()(*value) : nullptr;
+    }
 };
-}
+} // namespace
 
 std::optional<Value> VectorMLTTileFeature::getValue(const std::string& key) const {
     if (const auto hit = feature.getProperties().find(key); hit != feature.getProperties().end()) {
@@ -71,17 +74,16 @@ FeatureIdentifier VectorMLTTileFeature::getID() const {
 
 namespace {
 inline GeometryCoordinate convert(const mlt::Coordinate& coord, double scale) {
-    return {static_cast<std::int16_t>(coord.x * scale), static_cast<std::int16_t>(coord.y * scale)};
+    return {static_cast<std::int16_t>(std::round(coord.x * scale)),
+            static_cast<std::int16_t>(std::round(coord.y * scale))};
 }
 inline GeometryCoordinates convert(const mlt::CoordVec& coords, double scale) {
     GeometryCoordinates result;
     result.reserve(coords.size());
-    std::ranges::transform(coords, std::back_inserter(result), [=](const auto coord) {
-        return convert(coord, scale);
-    });
+    std::ranges::transform(coords, std::back_inserter(result), [=](const auto coord) { return convert(coord, scale); });
     return result;
 }
-}
+} // namespace
 
 const GeometryCollection& VectorMLTTileFeature::getGeometries() const {
     MLN_TRACE_FUNC();
@@ -94,12 +96,12 @@ const GeometryCollection& VectorMLTTileFeature::getGeometries() const {
             case GeometryType::POINT: {
                 const auto& point = static_cast<const mlt::Point&>(geometry);
                 const auto& coord = point.getCoordinate();
-                lines = GeometryCollection { { convert(coord, scale) } };
+                lines = GeometryCollection{{convert(coord, scale)}};
                 break;
             }
             case GeometryType::LINESTRING: {
                 const auto& lineString = static_cast<const mlt::LineString&>(geometry);
-                lines = GeometryCollection { convert(lineString.getCoordinates(), scale) };
+                lines = GeometryCollection{convert(lineString.getCoordinates(), scale)};
                 break;
             }
             case GeometryType::POLYGON: {
@@ -115,19 +117,19 @@ const GeometryCollection& VectorMLTTileFeature::getGeometries() const {
             case GeometryType::MULTILINESTRING:
             case GeometryType::MULTIPOLYGON:
             default:
-                lines = {};
+                lines = GeometryCollection{};
                 break;
         }
-//        if (feature.getVersion() < 2 && feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
-//            lines = fixupPolygons(*lines);
-//        }
+        //        if (feature.getVersion() < 2 && feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
+        //            lines = fixupPolygons(*lines);
+        //        }
     }
     return *lines;
 }
 
 VectorMLTTileLayer::VectorMLTTileLayer(std::shared_ptr<const MapLibreTile> tile_, const mlt::Layer& layer_)
-    : tile(std::move(tile_)), layer(layer_)
-    {}
+    : tile(std::move(tile_)),
+      layer(layer_) {}
 
 std::size_t VectorMLTTileLayer::featureCount() const {
     return layer.getFeatures().size();
@@ -144,12 +146,11 @@ std::string VectorMLTTileLayer::getName() const {
 VectorMLTTileData::VectorMLTTileData(std::shared_ptr<const std::string> data_)
     : data(std::move(data_)) {}
 
-VectorMLTTileData::VectorMLTTileData(const VectorMLTTileData& other) :
-    data(other.data),
-    tile(other.tile) {
-}
+VectorMLTTileData::VectorMLTTileData(const VectorMLTTileData& other)
+    : data(other.data),
+      tile(other.tile) {}
 
-    std::unique_ptr<GeometryTileData> VectorMLTTileData::clone() const {
+std::unique_ptr<GeometryTileData> VectorMLTTileData::clone() const {
     return std::make_unique<VectorMLTTileData>(*this);
 }
 
@@ -158,30 +159,29 @@ std::unique_ptr<GeometryTileLayer> VectorMLTTileData::getLayer(const std::string
 
     // We're parsing this lazily so that we can construct VectorTileData objects
     // on the main thread without incurring the overhead of parsing immediately.
-    if (data && !data->empty() && !tile) {
-#if ANDROID
+    if (data && !tile) {
         if (data->size() > 4) {
             // Tile blobs are:
             // - metadata size as a 4-byte int
             // - metadata
             // - tile data
-            const auto metadataSize = *reinterpret_cast<const std::uint32_t *>(data->data());
+            const auto metadataSize = *reinterpret_cast<const std::uint32_t*>(data->data());
             if (metadataSize + 4 < data->size()) {
                 try {
                     const auto metadata = mlt::metadata::tileset::read({data->data() + 4, metadataSize});
                     if (metadata) {
-                        tile = std::make_shared<MapLibreTile>(mlt::Decoder().decode({data->data() + 4 + metadataSize, data->size() - metadataSize - 4}, *metadata));
+                        tile = std::make_shared<MapLibreTile>(mlt::Decoder().decode(
+                            {data->data() + 4 + metadataSize, data->size() - metadataSize - 4}, *metadata));
                     } else {
                         Log::Warning(Event::ParseTile, "MLT parse failed");
                     }
-                } catch (const std::exception &ex) {
+                } catch (const std::exception& ex) {
                     Log::Warning(Event::ParseTile, "MLT Metadata parse failed: " + std::string(ex.what()));
                 }
             }
         }
         // We don't need the raw data anymore
         data.reset();
-#endif
     }
 
     if (tile) {
@@ -198,7 +198,7 @@ std::vector<std::string> VectorMLTTileData::layerNames() const {
     }
     if (tile) {
         std::vector<std::string> result(tile->getLayers().size());
-        std::ranges::transform(tile->getLayers(), result.begin(), [](const auto& layer){ return layer.getName(); });
+        std::ranges::transform(tile->getLayers(), result.begin(), [](const auto& layer) { return layer.getName(); });
         return result;
     }
     return {};
