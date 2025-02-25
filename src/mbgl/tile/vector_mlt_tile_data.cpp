@@ -73,16 +73,19 @@ FeatureIdentifier VectorMLTTileFeature::getID() const {
 }
 
 namespace {
-inline GeometryCoordinate convert(const mlt::Coordinate& coord, double scale) {
-    return {static_cast<std::int16_t>(std::round(coord.x * scale)),
-            static_cast<std::int16_t>(std::round(coord.y * scale))};
-}
-inline GeometryCoordinates convert(const mlt::CoordVec& coords, double scale) {
-    GeometryCoordinates result;
-    result.reserve(coords.size());
-    std::ranges::transform(coords, std::back_inserter(result), [=](const auto coord) { return convert(coord, scale); });
-    return result;
-}
+struct PointConverter {
+    double scale;
+    inline constexpr static GeometryCoordinate convert(double scale, const mlt::Coordinate& coord) {
+        return {static_cast<std::int16_t>(std::round(coord.x * scale)),
+                static_cast<std::int16_t>(std::round(coord.y * scale))};
+    }
+    GeometryCoordinate operator()(const mlt::Coordinate& coord) const { return convert(scale, coord); }
+    GeometryCoordinates operator()(const mlt::CoordVec& coords) const {
+        GeometryCoordinates result(coords.size());
+        std::ranges::transform(coords, result.begin(), *this);
+        return result;
+    }
+};
 } // namespace
 
 const GeometryCollection& VectorMLTTileFeature::getGeometries() const {
@@ -92,25 +95,23 @@ const GeometryCollection& VectorMLTTileFeature::getGeometries() const {
         using mlt::metadata::tileset::GeometryType;
         const auto scale = static_cast<double>(util::EXTENT) / extent;
         const auto& geometry = feature.getGeometry();
+        const PointConverter convert{scale};
         switch (geometry.type) {
             case GeometryType::POINT: {
                 const auto& point = static_cast<const mlt::Point&>(geometry);
-                const auto& coord = point.getCoordinate();
-                lines = GeometryCollection{{convert(coord, scale)}};
+                lines = GeometryCollection{{convert(point.getCoordinate())}};
                 break;
             }
             case GeometryType::LINESTRING: {
                 const auto& lineString = static_cast<const mlt::LineString&>(geometry);
-                lines = GeometryCollection{convert(lineString.getCoordinates(), scale)};
+                lines = GeometryCollection{convert(lineString.getCoordinates())};
                 break;
             }
             case GeometryType::POLYGON: {
                 const auto& poly = static_cast<const mlt::Polygon&>(geometry);
                 lines.emplace(poly.getRings().size() + 1);
-                lines->at(0) = convert(poly.getShell(), scale);
-                std::ranges::transform(poly.getRings(), std::next(lines->begin()), [=](const auto coords) {
-                    return convert(coords, scale);
-                });
+                lines->front() = convert(poly.getShell());
+                std::ranges::transform(poly.getRings(), std::next(lines->begin()), convert);
                 break;
             }
             case GeometryType::MULTIPOINT:
@@ -120,9 +121,9 @@ const GeometryCollection& VectorMLTTileFeature::getGeometries() const {
                 lines = GeometryCollection{};
                 break;
         }
-        //        if (feature.getVersion() < 2 && feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
-        //            lines = fixupPolygons(*lines);
-        //        }
+        // if (feature.getVersion() < 2 && feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
+        //     lines = fixupPolygons(*lines);
+        // }
     }
     return *lines;
 }
