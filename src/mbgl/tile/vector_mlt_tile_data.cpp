@@ -11,23 +11,25 @@ namespace mbgl {
 
 VectorMLTTileFeature::VectorMLTTileFeature(std::shared_ptr<const MapLibreTile> tile_,
                                            const mlt::Feature& feature_,
-                                           std::uint32_t extent_)
+                                           std::uint32_t extent_,
+                                           int version_)
     : tile(std::move(tile_)),
       feature(feature_),
-      extent(extent_) {}
+      extent(extent_),
+      version(version_) {}
 
 FeatureType VectorMLTTileFeature::getType() const {
     using mlt::metadata::tileset::GeometryType;
     switch (feature.getGeometry().type) {
         case GeometryType::POINT:
             return FeatureType::Point;
+        case GeometryType::MULTIPOINT:
+        case GeometryType::MULTILINESTRING:
         case GeometryType::LINESTRING:
             return FeatureType::LineString;
         case GeometryType::POLYGON:
-            return FeatureType::Polygon;
-        case GeometryType::MULTIPOINT:
-        case GeometryType::MULTILINESTRING:
         case GeometryType::MULTIPOLYGON:
+            return FeatureType::Polygon;
         default:
             return FeatureType::Unknown;
     }
@@ -98,30 +100,48 @@ const GeometryCollection& VectorMLTTileFeature::getGeometries() const {
         const PointConverter convert{scale};
         switch (geometry.type) {
             case GeometryType::POINT: {
-                const auto& point = static_cast<const mlt::Point&>(geometry);
-                lines = GeometryCollection{{convert(point.getCoordinate())}};
-                break;
-            }
-            case GeometryType::LINESTRING: {
-                const auto& lineString = static_cast<const mlt::LineString&>(geometry);
-                lines = GeometryCollection{convert(lineString.getCoordinates())};
-                break;
-            }
-            case GeometryType::POLYGON: {
-                const auto& poly = static_cast<const mlt::Polygon&>(geometry);
-                lines.emplace(poly.getRings().size() + 1);
-                lines->front() = convert(poly.getShell());
-                std::ranges::transform(poly.getRings(), std::next(lines->begin()), convert);
+                const auto& geom = static_cast<const mlt::Point&>(geometry);
+                lines = GeometryCollection{{convert(geom.getCoordinate())}};
                 break;
             }
             case GeometryType::MULTIPOINT:
-            case GeometryType::MULTILINESTRING:
-            case GeometryType::MULTIPOLYGON:
+            case GeometryType::LINESTRING: {
+                const auto& geom = static_cast<const mlt::MultiPoint&>(geometry);
+                lines = GeometryCollection{convert(geom.getCoordinates())};
+                break;
+            }
+            case GeometryType::POLYGON: {
+                const auto& geom = static_cast<const mlt::Polygon&>(geometry);
+                lines.emplace(geom.getRings().size() + 1);
+                lines->front() = convert(geom.getShell());
+                std::ranges::transform(geom.getRings(), std::next(lines->begin()), convert);
+                break;
+            }
+            case GeometryType::MULTILINESTRING: {
+                const auto& geom = static_cast<const mlt::MultiLineString&>(geometry);
+                lines.emplace(geom.getLineStrings().size());
+                std::ranges::transform(geom.getLineStrings(), lines->begin(), convert);
+                break;
+            }
+            case GeometryType::MULTIPOLYGON: {
+                const auto& geom = static_cast<const mlt::MultiPolygon&>(geometry);
+                const auto& polys = geom.getPolygons();
+                lines.emplace();
+                lines->reserve(std::accumulate(polys.begin(), polys.end(), 0, [](const auto sum, const auto& pair) {
+                    return sum + 1 + pair.second.size();
+                }));
+                for (const auto& [shell, rings] : polys) {
+                    lines->push_back(convert(shell));
+                    std::ranges::transform(rings, std::back_inserter(*lines), convert);
+                }
+                break;
+            }
             default:
-                lines = GeometryCollection{};
+                lines.emplace();
                 break;
         }
-        // if (feature.getVersion() < 2 && feature.getType() == mapbox::vector_tile::GeomType::POLYGON) {
+        // unnecessary for MLT?
+        // if (version < 2 && geometry.type == GeometryType::POLYGON) {
         //     lines = fixupPolygons(*lines);
         // }
     }
@@ -137,7 +157,8 @@ std::size_t VectorMLTTileLayer::featureCount() const {
 }
 
 std::unique_ptr<GeometryTileFeature> VectorMLTTileLayer::getFeature(std::size_t i) const {
-    return std::make_unique<VectorMLTTileFeature>(tile, layer.getFeatures().at(i), layer.getExtent());
+    return std::make_unique<VectorMLTTileFeature>(
+        tile, layer.getFeatures().at(i), layer.getExtent(), layer.getVersion());
 }
 
 std::string VectorMLTTileLayer::getName() const {
