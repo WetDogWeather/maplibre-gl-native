@@ -139,15 +139,16 @@ public:
             maxz = maxzoom_ptr->second;
         }
 
-        auto minZoom = std::stoi(minz);
-        auto maxZoom = std::stoi(maxz);
+        auto minZoom = minz.empty() ? 0 : std::stoi(minz);
+        auto maxZoom = maxz.empty() ? 0 : std::stoi(maxz);
 
         for (auto const &entry : values) {
             if (entry.first == "scale") {
                 doc.AddMember("scale", std::stod(entry.second), allocator);
             } else if (entry.first == "minzoom" || entry.first == "maxzoom") {
                 auto name = rapidjson::Value(entry.first, allocator);
-                doc.AddMember(name, std::stoi(entry.second), allocator);
+                const auto value = entry.second.empty() ? 0 : std::stoi(entry.second);
+                doc.AddMember(name, value, allocator);
             } else if (entry.first == "bounds") {
                 std::vector<double> x = split(entry.second, ',');
                 if (x.size() != 4) {
