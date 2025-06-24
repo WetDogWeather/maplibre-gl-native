@@ -1,16 +1,26 @@
 #include <mbgl/renderer/layers/render_symbol_layer.hpp>
 
+#include <mbgl/gfx/collision_drawable_data.hpp>
 #include <mbgl/gfx/cull_face_mode.hpp>
+#include <mbgl/gfx/drawable_atlases_tweaker.hpp>
+#include <mbgl/gfx/drawable_builder.hpp>
 #include <mbgl/gfx/shader_registry.hpp>
+#include <mbgl/gfx/symbol_drawable_data.hpp>
 #include <mbgl/layout/symbol_layout.hpp>
 #include <mbgl/renderer/bucket_parameters.hpp>
 #include <mbgl/renderer/buckets/symbol_bucket.hpp>
+#include <mbgl/renderer/layer_group.hpp>
+#include <mbgl/renderer/layers/collision_layer_tweaker.hpp>
+#include <mbgl/renderer/layers/symbol_layer_tweaker.hpp>
 #include <mbgl/renderer/paint_parameters.hpp>
 #include <mbgl/renderer/property_evaluation_parameters.hpp>
 #include <mbgl/renderer/render_source.hpp>
 #include <mbgl/renderer/render_tile.hpp>
 #include <mbgl/renderer/tile_render_data.hpp>
+#include <mbgl/renderer/update_parameters.hpp>
 #include <mbgl/renderer/upload_parameters.hpp>
+#include <mbgl/shaders/shader_program_base.hpp>
+#include <mbgl/shaders/symbol_layer_ubo.hpp>
 #include <mbgl/style/layers/symbol_layer_impl.hpp>
 #include <mbgl/text/shaping.hpp>
 #include <mbgl/tile/geometry_tile.hpp>
@@ -19,17 +29,8 @@
 #include <mbgl/util/convert.hpp>
 #include <mbgl/util/math.hpp>
 
-#include <mbgl/gfx/drawable_atlases_tweaker.hpp>
-#include <mbgl/gfx/drawable_builder.hpp>
-#include <mbgl/gfx/symbol_drawable_data.hpp>
-#include <mbgl/gfx/collision_drawable_data.hpp>
-#include <mbgl/renderer/layer_group.hpp>
-#include <mbgl/renderer/layers/symbol_layer_tweaker.hpp>
-#include <mbgl/renderer/update_parameters.hpp>
-#include <mbgl/shaders/shader_program_base.hpp>
-#include <mbgl/shaders/symbol_layer_ubo.hpp>
-#include <mbgl/renderer/layers/collision_layer_tweaker.hpp>
-
+#include <algorithm>
+#include <ranges>
 #include <set>
 
 namespace mbgl {
@@ -133,6 +134,11 @@ struct SegmentGroup {
 inline const SymbolLayer::Impl& impl_cast(const Immutable<style::Layer::Impl>& impl) {
     assert(impl->getTypeInfo() == SymbolLayer::Impl::staticTypeInfo());
     return static_cast<const SymbolLayer::Impl&>(*impl);
+}
+
+// inverse of `SymbolBucket::opacityVertex`
+std::pair<float, bool> decodeOpacityVertex(const float vertex) {
+    return {static_cast<float>(static_cast<uint8_t>(vertex) >> 1) / 127.0f, static_cast<uint8_t>(vertex) & 0x01};
 }
 
 } // namespace
@@ -243,8 +249,8 @@ void RenderSymbolLayer::prepare(const LayerPrepareParameters& params) {
                                                   .featureIndex = featureIndex,
                                                   .sourceId = baseImpl->source,
                                                   .sortKeyRange = sortKeyRange};
-                    auto sortPosition = std::upper_bound(
-                        placementData.cbegin(), placementData.cend(), layerData, [](const auto& lhs, const auto& rhs) {
+                    auto sortPosition = std::ranges::upper_bound(
+                        placementData, layerData, [](const auto& lhs, const auto& rhs) {
                             assert(lhs.sortKeyRange && rhs.sortKeyRange);
                             return lhs.sortKeyRange->sortKey < rhs.sortKeyRange->sortKey;
                         });
@@ -641,6 +647,18 @@ void RenderSymbolLayer::update(gfx::ShaderRegistry& shaders,
                 // Features need to be rendered in a specific order, so we add each segment individually
                 for (const auto& segment : buffer.segments) {
                     assert(segment.vertexOffset + segment.vertexLength <= buffer.vertices().elements());
+
+                    // does "placed" matter?
+                    if (!std::ranges::any_of(
+                            std::views::iota(segment.vertexOffset, segment.vertexOffset + segment.vertexLength),
+                            [&](auto i) {
+                                const auto& vertex = buffer.sharedOpacityVertices->at(i);
+                                const float opacity = decodeOpacityVertex(vertex.a1[0]).first;
+                                return opacity > 0.0f;
+                            })) {
+                        continue;
+                    }
+
                     renderableSegments.emplace(SegmentGroup{
                         .renderable = {segment, tile, renderData, bucketPaintProperties, segment.sortKey, type},
                         .segments = emptySegmentVector});
