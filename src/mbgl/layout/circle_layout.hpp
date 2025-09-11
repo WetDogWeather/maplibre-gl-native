@@ -46,7 +46,7 @@ public:
             const auto& sortKeyProperty = layout.template get<style::CircleSortKey>();
             float sortKey = sortKeyProperty.evaluate(*feature, zoom, style::CircleSortKey::defaultValue());
             CircleFeature circleFeature{.i = i, .feature = std::move(feature), .sortKey = sortKey};
-            const auto sortPosition = std::lower_bound(features.cbegin(), features.cend(), circleFeature);
+            const auto sortPosition = std::ranges::lower_bound(features, circleFeature, std::less<>());
             features.insert(sortPosition, std::move(circleFeature));
         }
     }
@@ -63,92 +63,30 @@ public:
 
         for (auto& circleFeature : features) {
             const auto i = circleFeature.i;
-            const std::unique_ptr<GeometryTileFeature>& feature = circleFeature.feature;
-            const GeometryCollection& geometries = feature->getGeometries();
+            const auto& feature = *circleFeature.feature;
+            const GeometryCollection& geometries = feature.getGeometries();
 
-            addCircle(*bucket, *feature, geometries, i, circleFeature.sortKey, canonical);
-
-            bucket->addFeature(*feature, geometries, {}, PatternLayerMap(), i, canonical);
+            bucket->addCircle(feature, geometries, i, circleFeature.sortKey, canonical);
             featureIndex->insert(geometries, i, sourceLayerID, bucketLeaderID);
         }
 
-        if (!bucket->hasData()) return;
-
-        for (const auto& pair : layerPropertiesMap) {
-            renderData.emplace(pair.first, LayerRenderData{bucket, pair.second});
+        if (bucket->hasData()) {
+            for (const auto& pair : layerPropertiesMap) {
+                renderData.emplace(pair.first, LayerRenderData{.bucket = bucket, .layerProperties = pair.second});
+            }
         }
     }
 
 private:
     struct CircleFeature {
-        friend bool operator<(const CircleFeature& lhs, const CircleFeature& rhs) { return lhs.sortKey < rhs.sortKey; }
+        friend bool operator<(const CircleFeature& lhs, const CircleFeature& rhs) noexcept {
+            return lhs.sortKey < rhs.sortKey;
+        }
 
         size_t i;
         std::unique_ptr<GeometryTileFeature> feature;
         float sortKey;
     };
-
-    void addCircle(CircleBucket& bucket,
-                   const GeometryTileFeature& feature,
-                   const GeometryCollection& geometry,
-                   std::size_t featureIndex,
-                   float sortKey,
-                   const CanonicalTileID& canonical) {
-        constexpr const uint16_t vertexLength = 4;
-
-        auto& segments = bucket.segments;
-        auto& vertices = bucket.vertices;
-        auto& triangles = bucket.triangles;
-
-        for (auto& circle : geometry) {
-            for (auto& point : circle) {
-                auto x = point.x;
-                auto y = point.y;
-
-                // Do not include points that are outside the tile boundaries.
-                // Include all points in Still mode. You need to include points from
-                // neighbouring tiles so that they are not clipped at tile boundaries.
-                if ((mode == MapMode::Continuous) && (x < 0 || x >= util::EXTENT || y < 0 || y >= util::EXTENT))
-                    continue;
-
-                if (segments.empty() ||
-                    segments.back().vertexLength + vertexLength > std::numeric_limits<uint16_t>::max()) {
-                    // Move to a new segments because the old one can't hold the geometry.
-                    segments.emplace_back(vertices.elements(), triangles.elements(), 0ul, 0ul, sortKey);
-                }
-
-                // this geometry will be of the Point type, and we'll derive
-                // two triangles from it.
-                //
-                // ┌─────────┐
-                // │ 4     3 │
-                // │         │
-                // │ 1     2 │
-                // └─────────┘
-                //
-                vertices.emplace_back(CircleBucket::vertex(point, -1, -1)); // 1
-                vertices.emplace_back(CircleBucket::vertex(point, 1, -1));  // 2
-                vertices.emplace_back(CircleBucket::vertex(point, 1, 1));   // 3
-                vertices.emplace_back(CircleBucket::vertex(point, -1, 1));  // 4
-
-                auto& segment = segments.back();
-                assert(segment.vertexLength <= std::numeric_limits<uint16_t>::max());
-                auto index = static_cast<uint16_t>(segment.vertexLength);
-
-                // 1, 2, 3
-                // 1, 4, 3
-                triangles.emplace_back(index, index + 1, index + 2);
-                triangles.emplace_back(index, index + 3, index + 2);
-
-                segment.vertexLength += vertexLength;
-                segment.indexLength += 6;
-            }
-        }
-
-        for (auto& pair : bucket.paintPropertyBinders) {
-            pair.second.populateVertexVectors(feature, vertices.elements(), featureIndex, {}, {}, canonical);
-        }
-    }
 
     std::map<std::string, Immutable<style::LayerProperties>> layerPropertiesMap;
     std::string bucketLeaderID;

@@ -21,6 +21,10 @@ struct CircleSortKey : DataDrivenLayoutProperty<float> {
     static float defaultValue() { return 0.f; }
 };
 
+struct RenderPosition : PaintProperty<attributes::pos::Type::Value> {
+    static attributes::pos::Type::Value defaultValue() { return {0,0}; }
+};
+
 struct CircleBlur : DataDrivenPaintProperty<float, attributes::blur, uniforms::blur> {
     static float defaultValue() { return 0.f; }
 };
@@ -70,6 +74,7 @@ class CircleLayoutProperties : public Properties<
 > {};
 
 class CirclePaintProperties : public Properties<
+    RenderPosition,
     CircleBlur,
     CircleColor,
     CircleOpacity,

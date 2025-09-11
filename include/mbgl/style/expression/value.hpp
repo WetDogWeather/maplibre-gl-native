@@ -101,6 +101,13 @@ struct ValueConverter<mbgl::Value> {
 };
 
 template <>
+struct ValueConverter<std::int16_t> {
+    static type::Type expressionType() { return type::Number; }
+    static Value toExpressionValue(std::int16_t value);
+    static std::optional<std::int16_t> fromExpressionValue(const Value& value);
+};
+
+template <>
 struct ValueConverter<float> {
     static type::Type expressionType() { return type::Number; }
     static Value toExpressionValue(float value);

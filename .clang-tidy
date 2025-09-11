@@ -81,6 +81,7 @@ Checks: [
     -performance-noexcept-move-constructor,
     -performance-no-int-to-ptr,
     -performance-unnecessary-value-param,
+    -portability-avoid-pragma-once,
     -readability-avoid-const-params-in-decls,
     -readability-braces-around-statements,
     -readability-const-return-type,

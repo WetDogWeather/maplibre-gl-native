@@ -48,6 +48,7 @@ std::string toString(const Value& value) {
                        [](const auto& v_) { return stringify(v_); });
 }
 
+namespace {
 void writeJSON(rapidjson::Writer<rapidjson::StringBuffer>& writer, const Value& value) {
     value.match([&](const NullValue&) { writer.Null(); },
                 [&](bool b) { writer.Bool(b); },
@@ -87,6 +88,7 @@ void writeJSON(rapidjson::Writer<rapidjson::StringBuffer>& writer, const Value& 
                     writer.EndObject();
                 });
 }
+} // namespace
 
 std::string stringify(const Value& value) {
     rapidjson::StringBuffer buffer;
@@ -192,6 +194,15 @@ mbgl::Value ValueConverter<mbgl::Value>::fromExpressionValue(const Value& value)
         [&](const auto& a) -> mbgl::Value { return a; });
 }
 
+Value ValueConverter<std::int16_t>::toExpressionValue(const std::int16_t value) {
+    return static_cast<double>(value);
+}
+
+std::optional<std::int16_t> ValueConverter<std::int16_t>::fromExpressionValue(const Value& value) {
+    return value.template is<double>() ? static_cast<std::int16_t>(value.template get<double>())
+                                       : std::optional<std::int16_t>();
+}
+
 Value ValueConverter<float>::toExpressionValue(const float value) {
     return static_cast<double>(value);
 }
@@ -200,6 +211,7 @@ std::optional<float> ValueConverter<float>::fromExpressionValue(const Value& val
     return value.template is<double>() ? static_cast<float>(value.template get<double>()) : std::optional<float>();
 }
 
+namespace {
 template <typename T, typename Container>
 std::vector<Value> toArrayValue(const Container& value) {
     std::vector<Value> result;
@@ -209,6 +221,7 @@ std::vector<Value> toArrayValue(const Container& value) {
     }
     return result;
 }
+} // namespace
 
 template <typename T, std::size_t N>
 Value ValueConverter<std::array<T, N>>::toExpressionValue(const std::array<T, N>& value) {
@@ -363,6 +376,9 @@ template struct ValueConverter<std::array<double, 3>>;
 template type::Type valueTypeToExpressionType<float>();
 template type::Type valueTypeToExpressionType<Position>();
 template type::Type valueTypeToExpressionType<Rotation>();
+
+template type::Type valueTypeToExpressionType<std::array<std::int16_t, 2>>();
+template struct ValueConverter<std::array<std::int16_t, 2>>;
 
 template type::Type valueTypeToExpressionType<std::array<float, 2>>();
 template struct ValueConverter<std::array<float, 2>>;

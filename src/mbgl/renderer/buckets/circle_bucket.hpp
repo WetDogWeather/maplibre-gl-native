@@ -33,6 +33,12 @@ public:
 
     void update(const FeatureStates&, const GeometryTileLayer&, const std::string&, const ImagePositions&) override;
 
+    void addCircle(const GeometryTileFeature&,
+                   const GeometryCollection&,
+                   std::size_t featureIndex,
+                   float sortKey,
+                   const CanonicalTileID&);
+
     /*
      * @param {number} x vertex position
      * @param {number} y vertex position
@@ -46,11 +52,9 @@ public:
 
     using VertexVector = gfx::VertexVector<CircleLayoutVertex>;
     const std::shared_ptr<VertexVector> sharedVertices = std::make_shared<VertexVector>();
-    VertexVector& vertices = *sharedVertices;
 
     using TriangleIndexVector = gfx::IndexVector<gfx::Triangles>;
     const std::shared_ptr<TriangleIndexVector> sharedTriangles = std::make_shared<TriangleIndexVector>();
-    TriangleIndexVector& triangles = *sharedTriangles;
 
     SegmentVector segments;
 

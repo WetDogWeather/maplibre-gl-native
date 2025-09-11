@@ -75,6 +75,7 @@ bool RenderCircleLayer::hasCrossfade() const {
     return false;
 }
 
+namespace {
 GeometryCoordinate projectPoint(const GeometryCoordinate& p, const mat4& posMatrix, const Size& size) {
     vec4 pos = {{static_cast<double>(p.x), static_cast<double>(p.y), 0, 1}};
     matrix::transformMat4(pos, pos, posMatrix);
@@ -86,11 +87,13 @@ GeometryCoordinates projectQueryGeometry(const GeometryCoordinates& queryGeometr
                                          const mat4& posMatrix,
                                          const Size& size) {
     GeometryCoordinates projectedGeometry;
+    projectedGeometry.reserve(queryGeometry.size());
     for (auto& p : queryGeometry) {
         projectedGeometry.push_back(projectPoint(p, posMatrix, size));
     }
     return projectedGeometry;
 }
+} // namespace
 
 bool RenderCircleLayer::queryIntersectsFeature(const GeometryCoordinates& queryGeometry,
                                                const GeometryTileFeature& feature,
@@ -217,7 +220,7 @@ void RenderCircleLayer::update(gfx::ShaderRegistry& shaders,
         }
 
         auto& bucket = static_cast<CircleBucket&>(*renderData->bucket);
-        const auto vertexCount = bucket.vertices.elements();
+        const auto vertexCount = bucket.sharedVertices->elements();
         auto& paintPropertyBinders = bucket.paintPropertyBinders.at(getID());
 
         const auto prevBucketID = getRenderTileBucketID(tileID);
