@@ -48,9 +48,9 @@ float get(const CirclePaintProperties::PossiblyEvaluated& evaluated,
 
 float CircleBucket::getQueryRadius(const RenderLayer& layer) const {
     const auto& evaluated = getEvaluated<CircleLayerProperties>(layer.evaluatedProperties);
-    float radius = get<CircleRadius>(evaluated, layer.getID(), paintPropertyBinders);
-    float stroke = get<CircleStrokeWidth>(evaluated, layer.getID(), paintPropertyBinders);
-    auto translate = evaluated.get<CircleTranslate>();
+    const float radius = get<CircleRadius>(evaluated, layer.getID(), paintPropertyBinders);
+    const float stroke = get<CircleStrokeWidth>(evaluated, layer.getID(), paintPropertyBinders);
+    const auto translate = evaluated.get<CircleTranslate>();
     return radius + stroke + util::length(translate[0], translate[1]);
 }
 
@@ -108,11 +108,13 @@ void CircleBucket::addCircle(const GeometryTileFeature& feature,
         // 3┌─┐2
         //  │/│
         // 0└─┘1
+        vertices.reserve(vertexLength);
         vertices.emplace_back(CircleBucket::vertex({0, 0}, -1, -1));
         vertices.emplace_back(CircleBucket::vertex({0, 0}, 1, -1));
         vertices.emplace_back(CircleBucket::vertex({0, 0}, 1, 1));
         vertices.emplace_back(CircleBucket::vertex({0, 0}, -1, 1));
 
+        triangles.reserve(indexLength);
         triangles.emplace_back(0, 1, 2);
         triangles.emplace_back(0, 3, 2);
 
