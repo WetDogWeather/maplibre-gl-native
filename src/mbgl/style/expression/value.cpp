@@ -194,15 +194,6 @@ mbgl::Value ValueConverter<mbgl::Value>::fromExpressionValue(const Value& value)
         [&](const auto& a) -> mbgl::Value { return a; });
 }
 
-Value ValueConverter<std::int16_t>::toExpressionValue(const std::int16_t value) {
-    return static_cast<double>(value);
-}
-
-std::optional<std::int16_t> ValueConverter<std::int16_t>::fromExpressionValue(const Value& value) {
-    return value.template is<double>() ? static_cast<std::int16_t>(value.template get<double>())
-                                       : std::optional<std::int16_t>();
-}
-
 Value ValueConverter<float>::toExpressionValue(const float value) {
     return static_cast<double>(value);
 }
@@ -376,9 +367,6 @@ template struct ValueConverter<std::array<double, 3>>;
 template type::Type valueTypeToExpressionType<float>();
 template type::Type valueTypeToExpressionType<Position>();
 template type::Type valueTypeToExpressionType<Rotation>();
-
-template type::Type valueTypeToExpressionType<std::array<std::int16_t, 2>>();
-template struct ValueConverter<std::array<std::int16_t, 2>>;
 
 template type::Type valueTypeToExpressionType<std::array<float, 2>>();
 template struct ValueConverter<std::array<float, 2>>;
